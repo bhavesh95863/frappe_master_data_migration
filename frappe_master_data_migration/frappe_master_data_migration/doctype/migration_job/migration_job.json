@@ -19,6 +19,7 @@
   "on_conflict",
   "missing_link_action",
   "ignore_validations",
+  "preserve_timestamps",
   "section_break_extras",
   "include_files",
   "include_comments",
@@ -127,6 +128,13 @@
    "fieldname": "ignore_validations",
    "fieldtype": "Check",
    "label": "Skip Validations (import raw data)"
+  },
+  {
+   "default": "0",
+   "description": "Keep the source's original Created/Modified time and Owner/author on imported records, files and comments. Off (default) = use the current time and current user.",
+   "fieldname": "preserve_timestamps",
+   "fieldtype": "Check",
+   "label": "Preserve original created/modified & owner"
   },
   {
    "fieldname": "section_break_extras",

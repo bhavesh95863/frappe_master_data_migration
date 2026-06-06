@@ -74,6 +74,7 @@ class JobContext:
 		self.linked_by_parent = {}
 		self.include_linked = job.include_address_contact
 		self.ignore_validate = job.ignore_validations
+		self.preserve_audit = job.preserve_timestamps
 		self.linked_created = set()
 		self.resolutions = {
 			(row.child_table or "", row.link_field, row.source_value): {
@@ -112,6 +113,10 @@ def run_migration(migration_job: str | None = None):
 	job = frappe.get_doc("Migration Job", migration_job)
 	if job.status != "Queued":
 		return  # the job was reset/cancelled after this run was enqueued
+	# Bulk-import flags: skip welcome/notification emails (would crash on SMTP failure during the
+	# commit) and Frappe's import-time guards like User-creation throttling ("Throttled").
+	frappe.flags.mute_emails = True
+	frappe.flags.in_import = True
 	_set_job(job, {"status": "Running"})
 	try:
 		_run(job)
@@ -119,6 +124,9 @@ def run_migration(migration_job: str | None = None):
 		frappe.db.rollback()
 		_set_job(job, {"status": "Failed", "run_log": frappe.get_traceback()})
 		raise
+	finally:
+		frappe.flags.mute_emails = False
+		frappe.flags.in_import = False
 
 
 def _run(job):
@@ -257,7 +265,8 @@ def _import_linked_doc(ctx, entry):
 	frappe.db.savepoint(savepoint)
 	try:
 		_insert_new(doctype, name, entry["doc"], ignore_links=True, ignore_validate=ctx.ignore_validate)
-		_preserve_audit(doctype, name, entry["doc"])
+		if ctx.preserve_audit:
+			_preserve_audit(doctype, name, entry["doc"])
 		_log_record(ctx.job, f"{doctype}: {name}", "Created", "Linked document")
 		ctx.counts["Created"] += 1
 	except frappe.QueryDeadlockError:
@@ -295,7 +304,8 @@ def _import_one(ctx, record):
 		_insert_new(ctx.doctype, name, doc_dict, ignore_links, ctx.ignore_validate)
 		action = "Created"
 
-	_preserve_audit(ctx.doctype, name, doc_dict)
+	if ctx.preserve_audit:
+		_preserve_audit(ctx.doctype, name, doc_dict)
 	_import_extras(ctx, name, record)
 	note = _format_missing(missing) if missing else ""
 	return action, note
@@ -502,21 +512,27 @@ def _create_stub(doctype, name):
 
 def _import_extras(ctx, name, record):
 	if ctx.job.include_files:
-		_import_files(ctx.doctype, name, record.get("files") or [])
+		_import_files(ctx.doctype, name, record.get("files") or [], ctx.preserve_audit)
 	if ctx.job.include_comments:
-		_import_comments(ctx.doctype, name, record.get("comments") or [])
+		_import_comments(ctx.doctype, name, record.get("comments") or [], ctx.preserve_audit)
 	if ctx.job.include_versions:
-		_import_versions(ctx.doctype, name, record.get("versions") or [])
+		_import_versions(ctx.doctype, name, record.get("versions") or [], ctx.preserve_audit)
 	if ctx.job.include_assignments_tags:
 		_import_assignments(ctx.doctype, name, record.get("assignments") or [])
 		_import_tags(ctx.doctype, name, record.get("tags") or [])
 
 
-def _import_files(doctype, name, files):
+def _import_files(doctype, name, files, preserve=False):
 	for entry in files:
-		if frappe.db.exists(
-			"File", {"attached_to_doctype": doctype, "attached_to_name": name, "file_name": entry["file_name"]}
-		):
+		existing = frappe.get_all(
+			"File",
+			filters={"attached_to_doctype": doctype, "attached_to_name": name, "file_name": entry["file_name"]},
+			order_by="creation asc",
+			pluck="name",
+		)
+		if existing:
+			for extra in existing[1:]:  # self-heal duplicates left by earlier runs
+				frappe.delete_doc("File", extra, ignore_permissions=True, force=True)
 			continue
 		file_doc = frappe.get_doc(
 			{
@@ -529,10 +545,11 @@ def _import_files(doctype, name, files):
 				"decode": True,
 			}
 		).insert(ignore_permissions=True)
-		_preserve_audit("File", file_doc.name, entry)
+		if preserve:
+			_preserve_audit("File", file_doc.name, entry)
 
 
-def _import_comments(doctype, name, comments):
+def _import_comments(doctype, name, comments, preserve=False):
 	for comment in comments:
 		if frappe.db.exists(
 			"Comment",
@@ -555,17 +572,19 @@ def _import_comments(doctype, name, comments):
 				"comment_by": comment.get("comment_by"),
 			}
 		).insert(ignore_permissions=True)
-		_preserve_audit("Comment", comment_doc.name, comment)
+		if preserve:
+			_preserve_audit("Comment", comment_doc.name, comment)
 
 
-def _import_versions(doctype, name, versions):
+def _import_versions(doctype, name, versions, preserve=False):
 	if frappe.db.exists("Version", {"ref_doctype": doctype, "docname": name}):
 		return
 	for version in versions:
 		version_doc = frappe.get_doc(
 			{"doctype": "Version", "ref_doctype": doctype, "docname": name, "data": version.get("data")}
 		).insert(ignore_permissions=True)
-		_preserve_audit("Version", version_doc.name, version)
+		if preserve:
+			_preserve_audit("Version", version_doc.name, version)
 
 
 def _import_assignments(doctype, name, users):

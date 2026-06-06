@@ -109,7 +109,9 @@ class TestLinkedDocs(IntegrationTestCase):
 		entry = {"doctype": "Address", "name": name, "doc": addr.as_dict(no_nulls=True)}
 		frappe.delete_doc("Address", name, force=True)
 
-		ctx = SimpleNamespace(job=job, linked_created=set(), counts={"Created": 0, "Failed": 0}, ignore_validate=False)
+		ctx = SimpleNamespace(
+			job=job, linked_created=set(), counts={"Created": 0, "Failed": 0}, ignore_validate=False, preserve_audit=False
+		)
 		engine._import_linked_doc(ctx, entry)
 
 		self.assertTrue(frappe.db.exists("Address", name))
@@ -214,6 +216,30 @@ class TestFilesAndAudit(IntegrationTestCase):
 		self.assertTrue(frappe.db.exists("File", {"attached_to_name": name, "file_name": "a.txt"}))
 		self.assertEqual(frappe.db.count("File", {"attached_to_name": name, "file_name": "a.txt"}), 1)
 		self.assertEqual(str(frappe.db.get_value("Note", name, "creation")), "2019-05-05 09:00:00")
+
+
+class TestFileDedup(IntegrationTestCase):
+	def test_import_files_collapses_duplicates(self):
+		import base64
+
+		note = frappe.get_doc({"doctype": "Note", "title": "MDM Heal", "public": 1}).insert()
+		content = base64.b64encode(b"x").decode()
+		for _i in range(3):
+			frappe.get_doc(
+				{
+					"doctype": "File",
+					"file_name": "d.txt",
+					"attached_to_doctype": "Note",
+					"attached_to_name": note.name,
+					"content": content,
+					"decode": True,
+				}
+			).insert(ignore_permissions=True)
+		self.assertEqual(frappe.db.count("File", {"attached_to_name": note.name, "file_name": "d.txt"}), 3)
+
+		engine._import_files("Note", note.name, [{"file_name": "d.txt", "is_private": 0, "content_base64": content}])
+
+		self.assertEqual(frappe.db.count("File", {"attached_to_name": note.name, "file_name": "d.txt"}), 1)
 
 
 class TestInsert(IntegrationTestCase):
