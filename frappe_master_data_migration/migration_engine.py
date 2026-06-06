@@ -132,7 +132,12 @@ def _import_linked(ctx, names):
 	present = [name for name in names if frappe.db.exists(ctx.doctype, name)]
 	if not present:
 		return
-	grouped = ctx.client.call("export_linked_documents", {"parent_doctype": ctx.doctype, "parent_names": present})
+	try:
+		grouped = ctx.client.call("export_linked_documents", {"parent_doctype": ctx.doctype, "parent_names": present})
+	except Exception:
+		frappe.clear_last_message()
+		_log_record(ctx.job, ctx.doctype, "Failed", "Could not fetch linked Addresses/Contacts from source")
+		return
 	for entries in grouped.values():
 		for entry in entries:
 			_import_linked_doc(ctx, entry)
@@ -258,12 +263,23 @@ def _ensure_record(ctx, link_doctype, value):
 	if not link_doctype or value in ctx.created_cache or frappe.db.exists(link_doctype, value):
 		ctx.created_cache.add(value)
 		return
-	records = ctx.client.call("export_records", {"doctype": link_doctype, "names": [value]})
+	ctx.created_cache.add(value)
+	records = _safe_export(ctx, link_doctype, value)
 	if records:
 		_insert_new(link_doctype, value, records[0]["doc"], ignore_links=True)
+		_log_record(ctx.job, f"{link_doctype}: {value}", "Created", "Linked (created new)")
 	else:
 		_create_stub(link_doctype, value)
-	ctx.created_cache.add(value)
+		_log_record(ctx.job, f"{link_doctype}: {value}", "Created", "Stub — source record could not be read")
+	ctx.counts["Created"] += 1
+
+
+def _safe_export(ctx, link_doctype, value):
+	try:
+		return ctx.client.call("export_records", {"doctype": link_doctype, "names": [value]})
+	except Exception:
+		frappe.clear_last_message()
+		return None
 
 
 def _apply_mappings(ctx, doc_dict):

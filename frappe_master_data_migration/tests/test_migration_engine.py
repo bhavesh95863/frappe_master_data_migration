@@ -120,6 +120,30 @@ class TestLinkedDocs(IntegrationTestCase):
 		self.assertIn("Contact", engine.RELATED_DOCTYPES)
 
 
+class TestEnsureRecordFallback(IntegrationTestCase):
+	def test_stub_fallback_when_source_unreadable(self):
+		conn = frappe.get_doc(
+			{
+				"doctype": "Migration Connection",
+				"connection_name": "Fallback Test",
+				"remote_url": "http://localhost",
+				"api_key": "k",
+				"api_secret": "s",
+			}
+		).insert()
+		job = frappe.get_doc({"doctype": "Migration Job", "connection": conn.name, "source_doctype": "Item"}).insert()
+
+		class FailClient:
+			def call(self, *args, **kwargs):
+				raise frappe.PermissionError("denied")
+
+		ctx = SimpleNamespace(job=job, client=FailClient(), created_cache=set(), counts={"Created": 0})
+		engine._ensure_record(ctx, "Brand", "MDM Stub Brand")
+
+		self.assertTrue(frappe.db.exists("Brand", "MDM Stub Brand"))
+		self.assertEqual(ctx.counts["Created"], 1)
+
+
 class TestInsert(IntegrationTestCase):
 	def test_insert_preserves_name_and_children(self):
 		note = frappe.get_doc(
