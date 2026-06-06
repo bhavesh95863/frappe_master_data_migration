@@ -81,6 +81,45 @@ class TestStop(IntegrationTestCase):
 		self.assertTrue(engine._should_stop(job.name))
 
 
+class TestLinkedDocs(IntegrationTestCase):
+	def test_import_linked_doc_recreates_address(self):
+		conn = frappe.get_doc(
+			{
+				"doctype": "Migration Connection",
+				"connection_name": "Linked Test",
+				"remote_url": "http://localhost",
+				"api_key": "k",
+				"api_secret": "s",
+			}
+		).insert()
+		job = frappe.get_doc({"doctype": "Migration Job", "connection": conn.name, "source_doctype": "Customer"}).insert()
+
+		addr = frappe.get_doc(
+			{
+				"doctype": "Address",
+				"address_title": "MDM Linked",
+				"address_type": "Billing",
+				"address_line1": "1 Test St",
+				"city": "Testville",
+				"country": "India",
+				"state": "Maharashtra",
+			}
+		).insert()
+		name = addr.name
+		entry = {"doctype": "Address", "name": name, "doc": addr.as_dict(no_nulls=True)}
+		frappe.delete_doc("Address", name, force=True)
+
+		ctx = SimpleNamespace(job=job, linked_created=set(), counts={"Created": 0, "Failed": 0})
+		engine._import_linked_doc(ctx, entry)
+
+		self.assertTrue(frappe.db.exists("Address", name))
+		self.assertEqual(ctx.counts["Created"], 1)
+
+	def test_related_doctypes_excluded_from_link_fields(self):
+		self.assertIn("Address", engine.RELATED_DOCTYPES)
+		self.assertIn("Contact", engine.RELATED_DOCTYPES)
+
+
 class TestInsert(IntegrationTestCase):
 	def test_insert_preserves_name_and_children(self):
 		note = frappe.get_doc(

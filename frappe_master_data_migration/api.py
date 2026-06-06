@@ -15,6 +15,10 @@ import json
 import frappe
 from frappe import _
 
+# Linked via the Dynamic Link "links" child table (point back to the parent), not by a
+# direct Link field — migrated together with the parent, kept out of the link analyzer.
+RELATED_DOCTYPES = ("Address", "Contact")
+
 
 @frappe.whitelist()
 def ping() -> dict:
@@ -86,6 +90,8 @@ def analyze_links(doctype: str, filters: str | None = None, child_fieldnames: st
 	result = []
 
 	for field in frappe.get_meta(doctype).get_link_fields():
+		if field.options in RELATED_DOCTYPES:
+			continue
 		values = frappe.get_all(doctype, filters=parsed, pluck=field.fieldname, distinct=True)
 		_add_link_row(result, "", field.fieldname, field.options, values)
 
@@ -105,6 +111,8 @@ def _analyze_child_links(result, doctype, child_fieldname, parent_names):
 	if parent_names is not None:
 		child_filters["parent"] = ["in", parent_names]
 	for field in frappe.get_meta(child_doctype).get_link_fields():
+		if field.options in RELATED_DOCTYPES:
+			continue
 		values = frappe.get_all(child_doctype, filters=child_filters, pluck=field.fieldname, distinct=True)
 		_add_link_row(result, child_fieldname, field.fieldname, field.options, values)
 
@@ -117,6 +125,39 @@ def _add_link_row(result, child_table, link_field, link_doctype, values):
 
 def _parent_names(doctype, parsed):
 	return frappe.get_all(doctype, filters=parsed, pluck="name")
+
+
+@frappe.whitelist()
+def export_linked_documents(parent_doctype: str, parent_names: str | list) -> dict:
+	"""Addresses/Contacts that point back to each parent via the Dynamic Link 'links' table."""
+	_check_read(parent_doctype)
+	names = _as_list(parent_names)
+	result = {name: [] for name in names}
+	for related in RELATED_DOCTYPES:
+		_collect_related(result, related, parent_doctype, names)
+	return result
+
+
+def _collect_related(result, related_doctype, parent_doctype, names):
+	if not frappe.has_permission(related_doctype, "read"):
+		return
+	links = frappe.get_all(
+		"Dynamic Link",
+		filters={
+			"parenttype": related_doctype,
+			"parentfield": "links",
+			"link_doctype": parent_doctype,
+			"link_name": ["in", names],
+		},
+		fields=["parent", "link_name"],
+	)
+	cache = {}
+	for row in links:
+		related_name = row["parent"]
+		if related_name not in cache:
+			doc = frappe.get_doc(related_doctype, related_name)
+			cache[related_name] = {"doctype": related_doctype, "name": related_name, "doc": doc.as_dict(no_nulls=True)}
+		result[row["link_name"]].append(cache[related_name])
 
 
 def _export_one(doctype, name, with_files, with_comments, with_versions, with_assignments_tags):

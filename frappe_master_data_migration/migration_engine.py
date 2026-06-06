@@ -13,6 +13,10 @@ from frappe_master_data_migration.remote_client import RemoteClient
 PAGE_SIZE = 200
 EXPORT_BATCH = 50
 
+# Linked via the Dynamic Link "links" table (Address/Contact point back to the parent).
+# Migrated together with the parent and excluded from link resolution / validation.
+RELATED_DOCTYPES = ("Address", "Contact")
+
 SYSTEM_FIELDS = {
 	"owner",
 	"creation",
@@ -57,7 +61,10 @@ class JobContext:
 		self.link_fields = [
 			{"fieldname": field.fieldname, "options": field.options}
 			for field in frappe.get_meta(self.doctype).get_link_fields()
+			if field.options not in RELATED_DOCTYPES
 		]
+		self.include_linked = job.include_address_contact
+		self.linked_created = set()
 		self.resolutions = {
 			(row.child_table or "", row.link_field, row.source_value): {
 				"action": row.action,
@@ -91,9 +98,12 @@ def _run(job):
 	for batch in _batches(names, EXPORT_BATCH):
 		if _should_stop(job.name):
 			return _finalize(ctx, "Stopped")
-		for record in _export(ctx, batch):
+		records = _export(ctx, batch)
+		for record in records:
 			_import_record(ctx, record)
 			done += 1
+		if ctx.include_linked:
+			_import_linked(ctx, [record["name"] for record in records])
 		_save_counts(ctx)
 		_publish(job.name, done, len(names))
 		frappe.db.commit()
@@ -115,6 +125,36 @@ def _import_record(ctx, record):
 	except Exception:
 		frappe.db.rollback(save_point=savepoint)
 		_log_record(ctx.job, record["name"], "Failed", frappe.get_traceback()[:2000])
+		ctx.counts["Failed"] += 1
+
+
+def _import_linked(ctx, names):
+	present = [name for name in names if frappe.db.exists(ctx.doctype, name)]
+	if not present:
+		return
+	grouped = ctx.client.call("export_linked_documents", {"parent_doctype": ctx.doctype, "parent_names": present})
+	for entries in grouped.values():
+		for entry in entries:
+			_import_linked_doc(ctx, entry)
+
+
+def _import_linked_doc(ctx, entry):
+	doctype, name = entry["doctype"], entry["name"]
+	if name in ctx.linked_created:
+		return
+	ctx.linked_created.add(name)
+	if frappe.db.exists(doctype, name):
+		return
+
+	savepoint = "mdm_link"
+	frappe.db.savepoint(savepoint)
+	try:
+		_insert_new(doctype, name, entry["doc"], ignore_links=True)
+		_log_record(ctx.job, f"{doctype}: {name}", "Created", "Linked document")
+		ctx.counts["Created"] += 1
+	except Exception:
+		frappe.db.rollback(save_point=savepoint)
+		_log_record(ctx.job, f"{doctype}: {name}", "Failed", frappe.get_traceback()[:2000])
 		ctx.counts["Failed"] += 1
 
 

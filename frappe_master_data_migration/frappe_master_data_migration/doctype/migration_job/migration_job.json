@@ -24,6 +24,7 @@
   "column_break_extras",
   "include_versions",
   "include_assignments_tags",
+  "include_address_contact",
   "section_break_children",
   "child_tables",
   "section_break_links",
@@ -150,6 +151,13 @@
    "fieldtype": "Check",
    "label": "Include Assignments & Tags",
    "default": "0"
+  },
+  {
+   "fieldname": "include_address_contact",
+   "fieldtype": "Check",
+   "label": "Include linked Addresses & Contacts",
+   "default": "0",
+   "description": "Also migrate all Addresses & Contacts linked to each record (e.g. a Customer's or Supplier's addresses). These are kept out of the Link Resolution list."
   },
   {
    "fieldname": "section_break_children",
