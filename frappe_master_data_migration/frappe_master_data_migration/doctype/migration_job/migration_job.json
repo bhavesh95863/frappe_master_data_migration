@@ -34,6 +34,7 @@
   "field_mappings",
   "section_break_results",
   "total_fetched",
+  "processed_count",
   "created_count",
   "updated_count",
   "column_break_results",
@@ -212,6 +213,12 @@
    "fieldname": "total_fetched",
    "fieldtype": "Int",
    "label": "Total Fetched",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processed_count",
+   "fieldtype": "Int",
+   "label": "Processed",
    "read_only": 1
   },
   {

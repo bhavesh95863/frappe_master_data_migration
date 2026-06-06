@@ -179,26 +179,39 @@ def _get_files(doctype, name):
 	files = frappe.get_all(
 		"File",
 		filters={"attached_to_doctype": doctype, "attached_to_name": name},
-		fields=["name", "file_name", "is_private"],
+		fields=["name", "file_name", "is_private", "creation", "owner"],
 	)
 	result = []
 	for entry in files:
-		file_doc = frappe.get_doc("File", entry["name"])
+		content = _read_file_content(entry["name"])
+		if content is None:
+			continue
 		result.append(
 			{
-				"file_name": file_doc.file_name,
-				"is_private": file_doc.is_private,
-				"content_base64": base64.b64encode(file_doc.get_content()).decode(),
+				"file_name": entry["file_name"],
+				"is_private": entry["is_private"],
+				"content_base64": base64.b64encode(content).decode(),
+				"creation": str(entry["creation"]),
+				"owner": entry["owner"],
 			}
 		)
 	return result
+
+
+def _read_file_content(file_name):
+	try:
+		content = frappe.get_doc("File", file_name).get_content()
+	except Exception:
+		frappe.clear_last_message()
+		return None
+	return content.encode("utf-8") if isinstance(content, str) else content
 
 
 def _get_comments(doctype, name):
 	return frappe.get_all(
 		"Comment",
 		filters={"reference_doctype": doctype, "reference_name": name, "comment_type": "Comment"},
-		fields=["content", "comment_email", "comment_by", "creation"],
+		fields=["content", "comment_email", "comment_by", "creation", "owner"],
 		order_by="creation asc",
 	)
 

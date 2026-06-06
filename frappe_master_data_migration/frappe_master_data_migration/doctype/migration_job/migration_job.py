@@ -34,6 +34,21 @@ class MigrationJob(Document):
 		self.save()
 		return len(self.link_resolutions)
 
+	@frappe.whitelist()
+	def get_progress(self):
+		total = self.total_fetched or 0
+		processed = self.processed_count or 0
+		return {
+			"status": self.status,
+			"total": total,
+			"processed": processed,
+			"percent": round(processed / total * 100) if total else 0,
+			"created": self.created_count,
+			"updated": self.updated_count,
+			"skipped": self.skipped_count,
+			"failed": self.failed_count,
+		}
+
 	@frappe.whitelist(methods=["POST"])
 	def stop_migration(self):
 		if self.status not in ("Queued", "Running"):
@@ -109,6 +124,7 @@ class MigrationJob(Document):
 				)
 
 	def _reset_results(self):
-		for field in ("total_fetched", "created_count", "updated_count", "skipped_count", "failed_count"):
+		fields = ("total_fetched", "processed_count", "created_count", "updated_count", "skipped_count", "failed_count")
+		for field in fields:
 			self.set(field, 0)
 		self.run_log = ""

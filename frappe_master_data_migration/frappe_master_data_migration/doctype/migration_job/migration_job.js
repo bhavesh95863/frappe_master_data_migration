@@ -23,13 +23,82 @@ frappe.ui.form.on("Migration Job", {
 			frappe.set_route("List", "Migration Record Log", { migration_job: frm.doc.name });
 		});
 
-		if (["Running", "Queued"].includes(frm.doc.status)) {
-			frm.dashboard.set_headline(__("Migration {0}…", [frm.doc.status]));
-		}
-
-		subscribe_progress(frm);
+		render_progress(frm);
 	},
 });
+
+const BUSY = ["Queued", "Running", "Stopping"];
+
+function render_progress(frm) {
+	stop_poll(frm);
+	frappe.realtime.off("mdm_progress");
+	if (frm.is_new()) {
+		return;
+	}
+
+	const counts = {
+		created: frm.doc.created_count,
+		updated: frm.doc.updated_count,
+		skipped: frm.doc.skipped_count,
+		failed: frm.doc.failed_count,
+	};
+	draw_progress(frm, frm.doc.processed_count, frm.doc.total_fetched, counts, frm.doc.status);
+
+	if (!BUSY.includes(frm.doc.status)) {
+		return;
+	}
+
+	frappe.realtime.on("mdm_progress", (data) => {
+		if (data.job === frm.doc.name) {
+			draw_progress(frm, data.done, data.total, null, "Running");
+		}
+	});
+	frm.__mdm_poll = setInterval(() => poll_progress(frm), 3000);
+}
+
+function poll_progress(frm) {
+	if (frappe.get_route()[1] !== "Migration Job" || frappe.get_route()[2] !== frm.doc.name) {
+		stop_poll(frm);
+		return;
+	}
+	frm.call("get_progress").then((r) => {
+		if (r.exc || !r.message) {
+			return;
+		}
+		const p = r.message;
+		draw_progress(frm, p.processed, p.total, p, p.status);
+		if (!BUSY.includes(p.status)) {
+			stop_poll(frm);
+			frm.reload_doc();
+			frappe.show_alert({ message: __("Migration {0}", [p.status]), indicator: "blue" });
+		}
+	});
+}
+
+function draw_progress(frm, processed, total, counts, status) {
+	processed = processed || 0;
+	total = total || 0;
+	const percent = total ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+	let message = __("{0} of {1} records ({2}%)", [processed, total, percent]);
+	if (counts) {
+		message += __(" — created {0}, updated {1}, skipped {2}, failed {3}", [
+			counts.created || 0,
+			counts.updated || 0,
+			counts.skipped || 0,
+			counts.failed || 0,
+		]);
+	}
+	frm.dashboard.show_progress(__("Migration ({0})", [status]), percent || 0.5, message);
+	const indicator = status === "Failed" ? "red" : BUSY.includes(status) ? "orange" : "green";
+	frm.dashboard.set_headline(`<span class="indicator ${indicator}">${__(status)} — ${percent}%</span>`);
+}
+
+function stop_poll(frm) {
+	if (frm.__mdm_poll) {
+		clearInterval(frm.__mdm_poll);
+		frm.__mdm_poll = null;
+	}
+}
 
 frappe.ui.form.on("Migration Field Map", {
 	target_fieldname: (frm, cdt, cdn) => set_value_doctype(frm, cdt, cdn),
@@ -104,22 +173,5 @@ function start_migration(frm) {
 				frm.reload_doc();
 			}
 		});
-	});
-}
-
-function subscribe_progress(frm) {
-	frappe.realtime.off("mdm_progress");
-	frappe.realtime.on("mdm_progress", (data) => {
-		if (data.job !== frm.doc.name) {
-			return;
-		}
-		frm.dashboard.show_progress(
-			__("Migration"),
-			(data.done / (data.total || 1)) * 100,
-			__("{0} of {1} records", [data.done, data.total])
-		);
-		if (data.done >= data.total) {
-			setTimeout(() => frm.reload_doc(), 1500);
-		}
 	});
 }

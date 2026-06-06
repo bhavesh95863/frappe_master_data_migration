@@ -29,6 +29,7 @@ SYSTEM_FIELDS = {
 	"_assign",
 	"_liked_by",
 }
+AUDIT_FIELDS = ("creation", "owner", "modified", "modified_by")
 CHILD_SYSTEM_FIELDS = {
 	"name",
 	"owner",
@@ -102,21 +103,23 @@ def _run(job):
 	job.db_set("run_log", ctx.options_line)
 	names = _fetch_all_names(ctx)
 	job.db_set("total_fetched", len(names))
+	_publish(job.name, 0, len(names))
 
 	done = 0
 	for batch in _batches(names, EXPORT_BATCH):
 		if _should_stop(job.name):
 			return _finalize(ctx, "Stopped")
-		records = _export(ctx, batch)
+		records = _safe_export_batch(ctx, batch)
 		batch_names = [record["name"] for record in records]
 		for record in records:
 			_import_record(ctx, record)
-			done += 1
 		if ctx.include_linked:
 			_import_linked(ctx, batch_names)
 		_apply_deferred_primaries(ctx, batch_names)
 		if ctx.include_linked:
 			_set_primaries(ctx, batch_names)
+		done += len(batch)
+		job.db_set("processed_count", done, update_modified=False)
 		_save_counts(ctx)
 		_publish(job.name, done, len(names))
 		frappe.db.commit()
@@ -169,6 +172,7 @@ def _import_linked_doc(ctx, entry):
 	frappe.db.savepoint(savepoint)
 	try:
 		_insert_new(doctype, name, entry["doc"], ignore_links=True, ignore_validate=ctx.ignore_validate)
+		_preserve_audit(doctype, name, entry["doc"])
 		_log_record(ctx.job, f"{doctype}: {name}", "Created", "Linked document")
 		ctx.counts["Created"] += 1
 	except Exception:
@@ -199,12 +203,15 @@ def _import_one(ctx, record):
 	ignore_links = ctx.job.missing_link_action != "Skip Record"
 	if exists:
 		_update_existing(ctx.doctype, name, doc_dict, ignore_links, ctx.ignore_validate)
-		return "Updated", ""
+		action = "Updated"
+	else:
+		_insert_new(ctx.doctype, name, doc_dict, ignore_links, ctx.ignore_validate)
+		action = "Created"
 
-	_insert_new(ctx.doctype, name, doc_dict, ignore_links, ctx.ignore_validate)
+	_preserve_audit(ctx.doctype, name, doc_dict)
 	_import_extras(ctx, name, record)
 	note = _format_missing(missing) if missing else ""
-	return "Created", note
+	return action, note
 
 
 def _insert_new(doctype, name, doc_dict, ignore_links, ignore_validate=False):
@@ -221,6 +228,13 @@ def _update_existing(doctype, name, doc_dict, ignore_links, ignore_validate=Fals
 	doc.flags.ignore_links = ignore_links
 	doc.flags.ignore_validate = ignore_validate
 	doc.save(ignore_permissions=True)
+
+
+def _preserve_audit(doctype, name, source):
+	"""Keep the source's created/modified time and user instead of 'now' / the migrating user."""
+	audit = {field: source.get(field) for field in AUDIT_FIELDS if source.get(field)}
+	if audit:
+		frappe.db.set_value(doctype, name, audit, update_modified=False)
 
 
 def _prepare(doc_dict, doctype, name, for_update=False):
@@ -412,7 +426,11 @@ def _import_extras(ctx, name, record):
 
 def _import_files(doctype, name, files):
 	for entry in files:
-		frappe.get_doc(
+		if frappe.db.exists(
+			"File", {"attached_to_doctype": doctype, "attached_to_name": name, "file_name": entry["file_name"]}
+		):
+			continue
+		file_doc = frappe.get_doc(
 			{
 				"doctype": "File",
 				"file_name": entry["file_name"],
@@ -423,11 +441,22 @@ def _import_files(doctype, name, files):
 				"decode": True,
 			}
 		).insert(ignore_permissions=True)
+		_preserve_audit("File", file_doc.name, entry)
 
 
 def _import_comments(doctype, name, comments):
 	for comment in comments:
-		frappe.get_doc(
+		if frappe.db.exists(
+			"Comment",
+			{
+				"reference_doctype": doctype,
+				"reference_name": name,
+				"comment_type": "Comment",
+				"content": comment.get("content"),
+			},
+		):
+			continue
+		comment_doc = frappe.get_doc(
 			{
 				"doctype": "Comment",
 				"comment_type": "Comment",
@@ -438,13 +467,17 @@ def _import_comments(doctype, name, comments):
 				"comment_by": comment.get("comment_by"),
 			}
 		).insert(ignore_permissions=True)
+		_preserve_audit("Comment", comment_doc.name, comment)
 
 
 def _import_versions(doctype, name, versions):
+	if frappe.db.exists("Version", {"ref_doctype": doctype, "docname": name}):
+		return
 	for version in versions:
-		frappe.get_doc(
+		version_doc = frappe.get_doc(
 			{"doctype": "Version", "ref_doctype": doctype, "docname": name, "data": version.get("data")}
 		).insert(ignore_permissions=True)
+		_preserve_audit("Version", version_doc.name, version)
 
 
 def _import_assignments(doctype, name, users):
@@ -488,6 +521,28 @@ def _fetch_all_names(ctx):
 		if not result["has_next"]:
 			return names
 		start += PAGE_SIZE
+
+
+def _safe_export_batch(ctx, batch):
+	"""Export the whole batch; if the source errors (e.g. a missing file), fall back to
+	one-by-one so a single bad record is logged and skipped instead of failing the job."""
+	try:
+		return _export(ctx, batch)
+	except Exception:
+		frappe.clear_last_message()
+		return _export_individually(ctx, batch)
+
+
+def _export_individually(ctx, batch):
+	records = []
+	for name in batch:
+		try:
+			records.extend(_export(ctx, [name]))
+		except Exception:
+			frappe.clear_last_message()
+			_log_record(ctx.job, name, "Failed", "Source export failed (e.g. missing file on source)")
+			ctx.counts["Failed"] += 1
+	return records
 
 
 def _export(ctx, batch):
@@ -541,7 +596,8 @@ def _options_summary(ctx):
 
 
 def _publish(job_name, done, total):
-	frappe.publish_realtime("mdm_progress", {"job": job_name, "done": done, "total": total})
+	percent = round(done / total * 100) if total else 0
+	frappe.publish_realtime("mdm_progress", {"job": job_name, "done": done, "total": total, "percent": percent})
 
 
 def _batches(items, size):

@@ -183,6 +183,39 @@ class TestSetPrimaries(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("Customer", cust, "customer_primary_address"), addr)
 
 
+class TestFilesAndAudit(IntegrationTestCase):
+	def test_file_round_trip_and_audit_preserved(self):
+		import base64
+
+		from frappe_master_data_migration import api
+
+		note = frappe.get_doc({"doctype": "Note", "title": "MDM FileAudit", "public": 1}).insert()
+		frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "a.txt",
+				"attached_to_doctype": "Note",
+				"attached_to_name": note.name,
+				"content": base64.b64encode(b"hi").decode(),
+				"decode": True,
+			}
+		).insert()
+		frappe.db.set_value("Note", note.name, {"creation": "2019-05-05 09:00:00"}, update_modified=False)
+		name = note.name
+		payload = api.export_records("Note", [name], with_files=1)[0]
+		self.assertTrue(payload["files"])
+		frappe.delete_doc("Note", name, force=True)
+
+		engine._insert_new("Note", name, dict(payload["doc"]), ignore_links=True)
+		engine._preserve_audit("Note", name, payload["doc"])
+		engine._import_files("Note", name, payload["files"])
+		engine._import_files("Note", name, payload["files"])  # idempotent
+
+		self.assertTrue(frappe.db.exists("File", {"attached_to_name": name, "file_name": "a.txt"}))
+		self.assertEqual(frappe.db.count("File", {"attached_to_name": name, "file_name": "a.txt"}), 1)
+		self.assertEqual(str(frappe.db.get_value("Note", name, "creation")), "2019-05-05 09:00:00")
+
+
 class TestInsert(IntegrationTestCase):
 	def test_insert_preserves_name_and_children(self):
 		note = frappe.get_doc(
