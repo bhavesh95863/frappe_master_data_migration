@@ -60,8 +60,8 @@ class JobContext:
 		self.counts = {"Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0}
 
 
-def run_migration(job_name: str | None = None):
-	job = frappe.get_doc("Migration Job", job_name)
+def run_migration(migration_job: str | None = None):
+	job = frappe.get_doc("Migration Job", migration_job)
 	job.db_set("status", "Running")
 	try:
 		_run(job)
@@ -98,7 +98,7 @@ def _import_record(ctx, record):
 		ctx.counts[action] += 1
 	except Exception:
 		frappe.db.rollback(save_point=savepoint)
-		_log_record(ctx.job, record["name"], "Failed", frappe.get_traceback(with_context=False)[:2000])
+		_log_record(ctx.job, record["name"], "Failed", frappe.get_traceback()[:2000])
 		ctx.counts["Failed"] += 1
 
 

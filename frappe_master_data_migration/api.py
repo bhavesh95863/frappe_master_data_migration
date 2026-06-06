@@ -54,8 +54,8 @@ def list_record_names(
 		filters=parsed,
 		fields=["name"],
 		order_by="creation asc",
-		start=int(start),
-		limit=int(limit) + 1,
+		limit_start=int(start),
+		limit_page_length=int(limit) + 1,
 	)
 	names = [row["name"] for row in rows]
 	has_next = len(names) > int(limit)

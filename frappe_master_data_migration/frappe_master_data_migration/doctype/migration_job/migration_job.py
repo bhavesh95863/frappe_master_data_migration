@@ -36,7 +36,7 @@ class MigrationJob(Document):
 			enqueue_after_commit=True,
 			job_id=f"mdm:{self.name}",
 			deduplicate=True,
-			job_name=self.name,
+			migration_job=self.name,
 		)
 		return self.status
 
