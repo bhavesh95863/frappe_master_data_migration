@@ -153,6 +153,36 @@ class TestDeferMissingRelated(IntegrationTestCase):
 		self.assertEqual(ctx.deferred_primary["CUST-1"]["customer_primary_contact"], "Does-Not-Exist-12345")
 
 
+class TestSetPrimaries(IntegrationTestCase):
+	def test_fills_empty_primary_from_linked_address(self):
+		grp = frappe.get_all("Customer Group", filters={"is_group": 0}, pluck="name")[0]
+		ter = frappe.get_all("Territory", filters={"is_group": 0}, pluck="name")[0]
+		cust = frappe.get_doc(
+			{"doctype": "Customer", "customer_name": "MDM SetPrimary", "customer_group": grp, "territory": ter}
+		).insert().name
+		addr = frappe.get_doc(
+			{
+				"doctype": "Address",
+				"address_title": "MDM SP",
+				"address_type": "Billing",
+				"address_line1": "1",
+				"city": "X",
+				"country": "India",
+				"state": "Maharashtra",
+				"links": [{"link_doctype": "Customer", "link_name": cust}],
+			}
+		).insert().name
+		frappe.db.set_value("Customer", cust, "customer_primary_address", None)
+
+		ctx = SimpleNamespace(
+			doctype="Customer",
+			related_link_map={"customer_primary_address": "Address", "customer_primary_contact": "Contact"},
+			linked_by_parent={cust: {"Address": [addr]}},
+		)
+		engine._set_primaries(ctx, [cust])
+		self.assertEqual(frappe.db.get_value("Customer", cust, "customer_primary_address"), addr)
+
+
 class TestInsert(IntegrationTestCase):
 	def test_insert_preserves_name_and_children(self):
 		note = frappe.get_doc(

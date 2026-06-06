@@ -68,6 +68,7 @@ class JobContext:
 			field.fieldname: field.options for field in all_link_fields if field.options in RELATED_DOCTYPES
 		}
 		self.deferred_primary = {}
+		self.linked_by_parent = {}
 		self.include_linked = job.include_address_contact
 		self.ignore_validate = job.ignore_validations
 		self.linked_created = set()
@@ -114,6 +115,8 @@ def _run(job):
 		if ctx.include_linked:
 			_import_linked(ctx, batch_names)
 		_apply_deferred_primaries(ctx, batch_names)
+		if ctx.include_linked:
+			_set_primaries(ctx, batch_names)
 		_save_counts(ctx)
 		_publish(job.name, done, len(names))
 		frappe.db.commit()
@@ -147,9 +150,11 @@ def _import_linked(ctx, names):
 		frappe.clear_last_message()
 		_log_record(ctx.job, ctx.doctype, "Failed", "Could not fetch linked Addresses/Contacts from source")
 		return
-	for entries in grouped.values():
+	for parent_name, entries in grouped.items():
 		for entry in entries:
 			_import_linked_doc(ctx, entry)
+			if frappe.db.exists(entry["doctype"], entry["name"]):
+				ctx.linked_by_parent.setdefault(parent_name, {}).setdefault(entry["doctype"], []).append(entry["name"])
 
 
 def _import_linked_doc(ctx, entry):
@@ -254,6 +259,27 @@ def _apply_deferred_primaries(ctx, names):
 		for fieldname, value in ctx.deferred_primary.get(name, {}).items():
 			if frappe.db.exists(ctx.related_link_map[fieldname], value):
 				frappe.db.set_value(ctx.doctype, name, fieldname, value, update_modified=False)
+
+
+def _set_primaries(ctx, names):
+	"""Fill an empty primary Address/Contact pointer from the imported linked docs."""
+	field_by_doctype = {doctype: field for field, doctype in ctx.related_link_map.items()}
+	for name in names:
+		for doctype, candidates in ctx.linked_by_parent.get(name, {}).items():
+			field = field_by_doctype.get(doctype)
+			if not field or frappe.db.get_value(ctx.doctype, name, field):
+				continue
+			chosen = _pick_primary(doctype, candidates)
+			if chosen:
+				frappe.db.set_value(ctx.doctype, name, field, chosen, update_modified=False)
+
+
+def _pick_primary(doctype, candidates):
+	flag = "is_primary_address" if doctype == "Address" else "is_primary_contact"
+	for candidate in candidates:
+		if frappe.db.get_value(doctype, candidate, flag):
+			return candidate
+	return candidates[0] if candidates else None
 
 
 def _strip_excluded_children(ctx, doc_dict):
