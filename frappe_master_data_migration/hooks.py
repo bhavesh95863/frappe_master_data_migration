@@ -11,15 +11,13 @@ app_license = "mit"
 # required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "frappe_master_data_migration",
-# 		"logo": "/assets/frappe_master_data_migration/logo.png",
-# 		"title": "Frappe Master Data Migration",
-# 		"route": "/frappe_master_data_migration",
-# 		"has_permission": "frappe_master_data_migration.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "frappe_master_data_migration",
+		"title": "Master Data Migration",
+		"route": "/app/migration-job",
+	}
+]
 
 # Includes in <head>
 # ------------------

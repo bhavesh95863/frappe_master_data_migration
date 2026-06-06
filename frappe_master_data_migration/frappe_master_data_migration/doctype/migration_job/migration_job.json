@@ -1,0 +1,253 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:MIG-{#####}",
+ "creation": "2026-06-06 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "connection",
+  "source_doctype",
+  "column_break_src",
+  "status",
+  "section_break_scope",
+  "filters_json",
+  "modified_after",
+  "column_break_scope",
+  "record_limit",
+  "section_break_rules",
+  "on_conflict",
+  "missing_link_action",
+  "section_break_extras",
+  "include_files",
+  "include_comments",
+  "column_break_extras",
+  "include_versions",
+  "include_assignments_tags",
+  "section_break_children",
+  "child_tables",
+  "section_break_mappings",
+  "field_mappings",
+  "section_break_results",
+  "total_fetched",
+  "created_count",
+  "updated_count",
+  "column_break_results",
+  "skipped_count",
+  "failed_count",
+  "section_break_log",
+  "run_log"
+ ],
+ "fields": [
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "options": "Migration Connection",
+   "label": "Connection",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "source_doctype",
+   "fieldtype": "Data",
+   "label": "Source DocType",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Name of the DocType to pull from the source site, e.g. Customer"
+  },
+  {
+   "fieldname": "column_break_src",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "options": "Draft\nQueued\nRunning\nCompleted\nCompleted with Errors\nFailed",
+   "default": "Draft",
+   "label": "Status",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_break_scope",
+   "fieldtype": "Section Break",
+   "label": "Scope"
+  },
+  {
+   "fieldname": "filters_json",
+   "fieldtype": "Small Text",
+   "label": "Filters (JSON)",
+   "description": "Optional. Frappe filters as JSON, e.g. {\"disabled\": 0} or [[\"creation\", \">\", \"2024-01-01\"]]"
+  },
+  {
+   "fieldname": "modified_after",
+   "fieldtype": "Datetime",
+   "label": "Modified After",
+   "description": "Optional. Only pull records modified after this time (incremental sync)."
+  },
+  {
+   "fieldname": "column_break_scope",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "record_limit",
+   "fieldtype": "Int",
+   "label": "Record Limit",
+   "description": "Optional cap on number of records (0 = all)."
+  },
+  {
+   "fieldname": "section_break_rules",
+   "fieldtype": "Section Break",
+   "label": "Rules"
+  },
+  {
+   "fieldname": "on_conflict",
+   "fieldtype": "Select",
+   "options": "Skip\nOverwrite",
+   "default": "Skip",
+   "label": "If Record Already Exists",
+   "reqd": 1
+  },
+  {
+   "fieldname": "missing_link_action",
+   "fieldtype": "Select",
+   "options": "Report & Continue\nAuto-create Stub\nSkip Record",
+   "default": "Report & Continue",
+   "label": "If a Linked Record is Missing",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_extras",
+   "fieldtype": "Section Break",
+   "label": "What to Transfer"
+  },
+  {
+   "fieldname": "include_files",
+   "fieldtype": "Check",
+   "label": "Include File Attachments",
+   "default": "0"
+  },
+  {
+   "fieldname": "include_comments",
+   "fieldtype": "Check",
+   "label": "Include Comments",
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_extras",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "include_versions",
+   "fieldtype": "Check",
+   "label": "Include Version History",
+   "default": "0"
+  },
+  {
+   "fieldname": "include_assignments_tags",
+   "fieldtype": "Check",
+   "label": "Include Assignments & Tags",
+   "default": "0"
+  },
+  {
+   "fieldname": "section_break_children",
+   "fieldtype": "Section Break",
+   "label": "Child Tables",
+   "description": "Click 'Fetch Meta' to load the child tables of the selected DocType, then deselect any you don't want."
+  },
+  {
+   "fieldname": "child_tables",
+   "fieldtype": "Table",
+   "options": "Migration Child Table Option",
+   "label": "Child Tables"
+  },
+  {
+   "fieldname": "section_break_mappings",
+   "fieldtype": "Section Break",
+   "label": "Value Mapping Rules",
+   "description": "Transform field values during import — e.g. remap Company 'Acme Pvt Ltd' to 'Acme Limited' so links resolve on this site."
+  },
+  {
+   "fieldname": "field_mappings",
+   "fieldtype": "Table",
+   "options": "Migration Field Map",
+   "label": "Field Mappings"
+  },
+  {
+   "fieldname": "section_break_results",
+   "fieldtype": "Section Break",
+   "label": "Results"
+  },
+  {
+   "fieldname": "total_fetched",
+   "fieldtype": "Int",
+   "label": "Total Fetched",
+   "read_only": 1
+  },
+  {
+   "fieldname": "created_count",
+   "fieldtype": "Int",
+   "label": "Created",
+   "read_only": 1
+  },
+  {
+   "fieldname": "updated_count",
+   "fieldtype": "Int",
+   "label": "Updated",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_results",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "skipped_count",
+   "fieldtype": "Int",
+   "label": "Skipped",
+   "read_only": 1
+  },
+  {
+   "fieldname": "failed_count",
+   "fieldtype": "Int",
+   "label": "Failed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_log",
+   "fieldtype": "Section Break",
+   "label": "Log"
+  },
+  {
+   "fieldname": "run_log",
+   "fieldtype": "Code",
+   "options": "Text",
+   "label": "Run Log",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-06 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Master Data Migration",
+ "name": "Migration Job",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

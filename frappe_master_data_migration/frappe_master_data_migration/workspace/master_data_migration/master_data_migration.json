@@ -1,0 +1,80 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"mdm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Master Data Migration</span>\",\"col\":12}},{\"id\":\"mdm_card\",\"type\":\"card\",\"data\":{\"card_name\":\"Migration\",\"col\":4}}]",
+ "creation": "2026-06-06 00:00:00",
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "sync",
+ "is_hidden": 0,
+ "label": "Master Data Migration",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Migration",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Migration Connection",
+   "link_count": 0,
+   "link_to": "Migration Connection",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Migration Job",
+   "link_count": 0,
+   "link_to": "Migration Job",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Migration Record Log",
+   "link_count": 0,
+   "link_to": "Migration Record Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-06-06 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Master Data Migration",
+ "name": "Master Data Migration",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Migration Job",
+   "link_to": "Migration Job",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Migration Connection",
+   "link_to": "Migration Connection",
+   "type": "DocType"
+  }
+ ],
+ "title": "Master Data Migration"
+}
