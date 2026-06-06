@@ -46,6 +46,7 @@ class JobContext:
 		self.excluded_child_fields = {row.fieldname for row in job.child_tables if not row.include}
 		self.mappings = [
 			{
+				"child_table": row.child_table,
 				"target_fieldname": row.target_fieldname,
 				"map_type": row.map_type,
 				"from_value": row.from_value,
@@ -57,6 +58,15 @@ class JobContext:
 			{"fieldname": field.fieldname, "options": field.options}
 			for field in frappe.get_meta(self.doctype).get_link_fields()
 		]
+		self.resolutions = {
+			(row.child_table or "", row.link_field, row.source_value): {
+				"action": row.action,
+				"map_to": row.map_to,
+				"link_doctype": row.link_doctype,
+			}
+			for row in job.link_resolutions
+		}
+		self.created_cache = set()
 		self.counts = {"Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0}
 
 
@@ -79,6 +89,8 @@ def _run(job):
 
 	done = 0
 	for batch in _batches(names, EXPORT_BATCH):
+		if _should_stop(job.name):
+			return _finalize(ctx, "Stopped")
 		for record in _export(ctx, batch):
 			_import_record(ctx, record)
 			done += 1
@@ -87,6 +99,10 @@ def _run(job):
 		frappe.db.commit()
 
 	_finalize(ctx)
+
+
+def _should_stop(job_name):
+	return frappe.db.get_value("Migration Job", job_name, "status") == "Stopping"
 
 
 def _import_record(ctx, record):
@@ -106,6 +122,7 @@ def _import_one(ctx, record):
 	name = record["name"]
 	doc_dict = record["doc"]
 	_strip_excluded_children(ctx, doc_dict)
+	_apply_resolutions(ctx, doc_dict)
 	_apply_mappings(ctx, doc_dict)
 
 	missing = _missing_links(ctx, doc_dict)
@@ -170,13 +187,61 @@ def _strip_excluded_children(ctx, doc_dict):
 		doc_dict.pop(fieldname, None)
 
 
-def _apply_mappings(ctx, doc_dict):
-	if not ctx.mappings:
+def _apply_resolutions(ctx, doc_dict):
+	if not ctx.resolutions:
 		return
-	_apply_to_row(ctx.mappings, doc_dict)
+	_resolve_row(ctx, "", ctx.link_fields, doc_dict)
 	for field in frappe.get_meta(ctx.doctype).get_table_fields():
+		child_links = [
+			{"fieldname": f.fieldname, "options": f.options}
+			for f in frappe.get_meta(field.options).get_link_fields()
+		]
 		for row in doc_dict.get(field.fieldname) or []:
-			_apply_to_row(ctx.mappings, row)
+			_resolve_row(ctx, field.fieldname, child_links, row)
+
+
+def _resolve_row(ctx, child_table, link_fields, row):
+	for link in link_fields:
+		value = row.get(link["fieldname"])
+		if not value:
+			continue
+		rule = ctx.resolutions.get((child_table, link["fieldname"], value))
+		if not rule:
+			continue
+		if rule["action"] == "Map":
+			row[link["fieldname"]] = rule["map_to"]
+		elif rule["action"] == "Create New":
+			_ensure_record(ctx, rule["link_doctype"] or link["options"], value)
+
+
+def _ensure_record(ctx, link_doctype, value):
+	if not link_doctype or value in ctx.created_cache or frappe.db.exists(link_doctype, value):
+		ctx.created_cache.add(value)
+		return
+	records = ctx.client.call("export_records", {"doctype": link_doctype, "names": [value]})
+	if records:
+		_insert_new(link_doctype, value, records[0]["doc"], ignore_links=True)
+	else:
+		_create_stub(link_doctype, value)
+	ctx.created_cache.add(value)
+
+
+def _apply_mappings(ctx, doc_dict):
+	_apply_mappings_to(ctx.doctype, ctx.mappings, doc_dict)
+
+
+def _apply_mappings_to(doctype, mappings, doc_dict):
+	if not mappings:
+		return
+	global_rules = [rule for rule in mappings if not rule.get("child_table")]
+	_apply_to_row(global_rules, doc_dict)
+	for field in frappe.get_meta(doctype).get_table_fields():
+		scoped = [rule for rule in mappings if rule.get("child_table") == field.fieldname]
+		rules = global_rules + scoped
+		if not rules:
+			continue
+		for row in doc_dict.get(field.fieldname) or []:
+			_apply_to_row(rules, row)
 
 
 def _apply_to_row(mappings, row):
@@ -345,9 +410,10 @@ def _save_counts(ctx):
 		ctx.job.db_set(f"{action.lower()}_count", count, update_modified=False)
 
 
-def _finalize(ctx):
+def _finalize(ctx, status=None):
 	_save_counts(ctx)
-	status = "Completed with Errors" if ctx.counts["Failed"] else "Completed"
+	if not status:
+		status = "Completed with Errors" if ctx.counts["Failed"] else "Completed"
 	summary = ", ".join(f"{action}: {count}" for action, count in ctx.counts.items())
 	ctx.job.db_set("status", status)
 	ctx.job.db_set("run_log", summary)

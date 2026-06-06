@@ -79,6 +79,46 @@ def export_records(
 	]
 
 
+@frappe.whitelist()
+def analyze_links(doctype: str, filters: str | None = None, child_fieldnames: str | list | None = None) -> list:
+	_check_read(doctype)
+	parsed = _parse_filters(filters)
+	result = []
+
+	for field in frappe.get_meta(doctype).get_link_fields():
+		values = frappe.get_all(doctype, filters=parsed, pluck=field.fieldname, distinct=True)
+		_add_link_row(result, "", field.fieldname, field.options, values)
+
+	parent_names = _parent_names(doctype, parsed) if parsed else None
+	for child_fieldname in _as_list(child_fieldnames or []):
+		_analyze_child_links(result, doctype, child_fieldname, parent_names)
+
+	return result
+
+
+def _analyze_child_links(result, doctype, child_fieldname, parent_names):
+	table_field = frappe.get_meta(doctype).get_field(child_fieldname)
+	if not table_field or table_field.fieldtype != "Table":
+		return
+	child_doctype = table_field.options
+	child_filters = {"parenttype": doctype, "parentfield": child_fieldname}
+	if parent_names is not None:
+		child_filters["parent"] = ["in", parent_names]
+	for field in frappe.get_meta(child_doctype).get_link_fields():
+		values = frappe.get_all(child_doctype, filters=child_filters, pluck=field.fieldname, distinct=True)
+		_add_link_row(result, child_fieldname, field.fieldname, field.options, values)
+
+
+def _add_link_row(result, child_table, link_field, link_doctype, values):
+	clean = sorted({value for value in values if value})
+	if clean:
+		result.append({"child_table": child_table, "link_field": link_field, "link_doctype": link_doctype, "values": clean})
+
+
+def _parent_names(doctype, parsed):
+	return frappe.get_all(doctype, filters=parsed, pluck="name")
+
+
 def _export_one(doctype, name, with_files, with_comments, with_versions, with_assignments_tags):
 	doc = frappe.get_doc(doctype, name)
 	payload = {"name": name, "doc": doc.as_dict(no_nulls=True)}

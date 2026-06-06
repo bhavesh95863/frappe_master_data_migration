@@ -5,46 +5,73 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "child_table",
   "target_fieldname",
   "map_type",
+  "target_doctype",
   "from_value",
-  "to_value"
+  "to_value",
+  "to_value_link"
  ],
  "fields": [
   {
+   "fieldname": "child_table",
+   "fieldtype": "Data",
+   "label": "Child Table",
+   "in_list_view": 1,
+   "columns": 2,
+   "description": "Leave blank to apply everywhere. Enter a child table fieldname (e.g. item_defaults, accounts) to apply only inside that table."
+  },
+  {
    "fieldname": "target_fieldname",
    "fieldtype": "Data",
-   "label": "Target Fieldname",
+   "label": "Field",
    "reqd": 1,
    "in_list_view": 1,
-   "columns": 3,
-   "description": "Applies to this field on the record and on any child row that has it"
+   "columns": 2,
+   "description": "Fieldname to change, e.g. company or income_account"
   },
   {
    "fieldname": "map_type",
    "fieldtype": "Select",
    "label": "Action",
    "options": "Replace Value\nSet Fixed Value\nClear Value",
-   "default": "Replace Value",
+   "default": "Set Fixed Value",
    "reqd": 1,
    "in_list_view": 1,
    "columns": 2
   },
   {
+   "fieldname": "target_doctype",
+   "fieldtype": "Link",
+   "options": "DocType",
+   "label": "Value DocType",
+   "description": "Auto-detected for Link fields. Set it to pick the value below from a list.",
+   "depends_on": "eval:doc.map_type!='Clear Value'"
+  },
+  {
    "fieldname": "from_value",
    "fieldtype": "Data",
    "label": "From Value",
-   "in_list_view": 1,
-   "columns": 3,
-   "depends_on": "eval:doc.map_type=='Replace Value'"
+   "depends_on": "eval:doc.map_type=='Replace Value'",
+   "description": "Replace only rows whose current value equals this."
   },
   {
    "fieldname": "to_value",
    "fieldtype": "Data",
    "label": "To Value",
    "in_list_view": 1,
-   "columns": 3,
-   "depends_on": "eval:doc.map_type!='Clear Value'"
+   "columns": 2,
+   "depends_on": "eval:doc.map_type!='Clear Value' && !doc.target_doctype"
+  },
+  {
+   "fieldname": "to_value_link",
+   "fieldtype": "Dynamic Link",
+   "options": "target_doctype",
+   "label": "Pick Value",
+   "in_list_view": 1,
+   "columns": 2,
+   "depends_on": "eval:doc.map_type!='Clear Value' && doc.target_doctype"
   }
  ],
  "index_web_pages_for_search": 1,

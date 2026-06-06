@@ -1,0 +1,86 @@
+{
+ "actions": [],
+ "creation": "2026-06-06 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "child_table",
+  "link_field",
+  "source_value",
+  "exists",
+  "action",
+  "link_doctype",
+  "map_to"
+ ],
+ "fields": [
+  {
+   "fieldname": "child_table",
+   "fieldtype": "Data",
+   "label": "Table",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "link_field",
+   "fieldtype": "Data",
+   "label": "Link Field",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "source_value",
+   "fieldtype": "Data",
+   "label": "Source Value",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "exists",
+   "fieldtype": "Check",
+   "label": "Exists Here",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "Keep\nMap\nCreate New",
+   "default": "Keep",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "link_doctype",
+   "fieldtype": "Data",
+   "label": "Link DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "map_to",
+   "fieldtype": "Dynamic Link",
+   "options": "link_doctype",
+   "label": "Map To",
+   "in_list_view": 1,
+   "columns": 2,
+   "depends_on": "eval:doc.action=='Map'"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-06 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Master Data Migration",
+ "name": "Migration Link Resolution",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

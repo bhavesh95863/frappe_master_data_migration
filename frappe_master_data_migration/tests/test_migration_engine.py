@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import frappe
 from frappe.tests import IntegrationTestCase, UnitTestCase
 
@@ -24,6 +26,59 @@ class TestFieldMapping(UnitTestCase):
 	def test_format_missing(self):
 		missing = [{"fieldname": "company", "option": "Company", "value": "Acme"}]
 		self.assertEqual(engine._format_missing(missing), "Missing links: company=Acme")
+
+
+class TestScopedMapping(IntegrationTestCase):
+	def test_scope_limits_rule_to_child_table(self):
+		doc = {"title": "Parent", "seen_by": [{"user": "alice"}, {"user": "bob"}]}
+		mappings = [
+			{"child_table": "seen_by", "target_fieldname": "user", "map_type": "Set Fixed Value", "to_value": "Administrator"},
+			{"child_table": "", "target_fieldname": "title", "map_type": "Set Fixed Value", "to_value": "Changed"},
+		]
+		engine._apply_mappings_to("Note", mappings, doc)
+		self.assertEqual(doc["title"], "Changed")
+		self.assertTrue(all(row["user"] == "Administrator" for row in doc["seen_by"]))
+
+	def test_global_rule_hits_parent_and_children(self):
+		doc = {"user": "x", "seen_by": [{"user": "y"}]}
+		mappings = [{"child_table": "", "target_fieldname": "user", "map_type": "Set Fixed Value", "to_value": "Administrator"}]
+		engine._apply_mappings_to("Note", mappings, doc)
+		self.assertEqual(doc["user"], "Administrator")
+		self.assertEqual(doc["seen_by"][0]["user"], "Administrator")
+
+
+class TestLinkResolution(UnitTestCase):
+	def test_map_replaces_value(self):
+		ctx = SimpleNamespace(
+			resolutions={("", "company", "Acme Pvt"): {"action": "Map", "map_to": "Acme Ltd", "link_doctype": "Company"}},
+			created_cache=set(),
+		)
+		row = {"company": "Acme Pvt"}
+		engine._resolve_row(ctx, "", [{"fieldname": "company", "options": "Company"}], row)
+		self.assertEqual(row["company"], "Acme Ltd")
+
+	def test_keep_leaves_value(self):
+		ctx = SimpleNamespace(resolutions={}, created_cache=set())
+		row = {"company": "Acme Pvt"}
+		engine._resolve_row(ctx, "", [{"fieldname": "company", "options": "Company"}], row)
+		self.assertEqual(row["company"], "Acme Pvt")
+
+
+class TestStop(IntegrationTestCase):
+	def test_should_stop_reads_status(self):
+		conn = frappe.get_doc(
+			{
+				"doctype": "Migration Connection",
+				"connection_name": "Stop Test",
+				"remote_url": "http://localhost",
+				"api_key": "k",
+				"api_secret": "s",
+			}
+		).insert()
+		job = frappe.get_doc({"doctype": "Migration Job", "connection": conn.name, "source_doctype": "Gender"}).insert()
+		self.assertFalse(engine._should_stop(job.name))
+		job.db_set("status", "Stopping")
+		self.assertTrue(engine._should_stop(job.name))
 
 
 class TestInsert(IntegrationTestCase):

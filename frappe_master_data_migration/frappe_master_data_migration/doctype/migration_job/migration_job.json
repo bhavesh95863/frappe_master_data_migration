@@ -26,6 +26,8 @@
   "include_assignments_tags",
   "section_break_children",
   "child_tables",
+  "section_break_links",
+  "link_resolutions",
   "section_break_mappings",
   "field_mappings",
   "section_break_results",
@@ -62,7 +64,7 @@
   {
    "fieldname": "status",
    "fieldtype": "Select",
-   "options": "Draft\nQueued\nRunning\nCompleted\nCompleted with Errors\nFailed",
+   "options": "Draft\nQueued\nRunning\nStopping\nStopped\nCompleted\nCompleted with Errors\nFailed",
    "default": "Draft",
    "label": "Status",
    "read_only": 1,
@@ -162,10 +164,22 @@
    "label": "Child Tables"
   },
   {
+   "fieldname": "section_break_links",
+   "fieldtype": "Section Break",
+   "label": "Link Resolution",
+   "description": "Click 'Analyze Links' to load every distinct Link value used in the source (parent + selected child tables). For each value choose Keep, Map (pick an existing record here), or Create New (pull it from the source)."
+  },
+  {
+   "fieldname": "link_resolutions",
+   "fieldtype": "Table",
+   "options": "Migration Link Resolution",
+   "label": "Link Resolutions"
+  },
+  {
    "fieldname": "section_break_mappings",
    "fieldtype": "Section Break",
    "label": "Value Mapping Rules",
-   "description": "Transform field values during import — e.g. remap Company 'Acme Pvt Ltd' to 'Acme Limited' so links resolve on this site."
+   "description": "Transform field values during import. Remap Company 'Acme Pvt Ltd' to 'Acme Limited', or scope a rule to a child table (e.g. set Company / clear income_account inside item_defaults or accounts) so company-specific defaults resolve on this site. To skip company-specific defaults entirely, deselect that child table above."
   },
   {
    "fieldname": "field_mappings",

@@ -20,6 +20,33 @@ class MigrationJob(Document):
 		self.save()
 		return meta
 
+	@frappe.whitelist()
+	def analyze_links(self):
+		if not self.source_doctype:
+			frappe.throw(_("Set a Source DocType first"))
+
+		included = [row.fieldname for row in self.child_tables if row.include]
+		groups = self._client().call(
+			"analyze_links",
+			{"doctype": self.source_doctype, "filters": self.filters_json or "", "child_fieldnames": included},
+		)
+		self._sync_link_resolutions(groups)
+		self.save()
+		return len(self.link_resolutions)
+
+	@frappe.whitelist(methods=["POST"])
+	def stop_migration(self):
+		if self.status not in ("Queued", "Running"):
+			frappe.throw(_("Nothing to stop — migration is {0}").format(self.status))
+		self.db_set("status", "Stopping")
+		frappe.db.commit()
+		return self.status
+
+	def on_trash(self):
+		if self.status in ("Queued", "Running", "Stopping"):
+			frappe.throw(_("Stop the migration before deleting this job"))
+		frappe.db.delete("Migration Record Log", {"migration_job": self.name})
+
 	@frappe.whitelist(methods=["POST"])
 	def start_migration(self):
 		if self.status == "Running":
@@ -57,6 +84,29 @@ class MigrationJob(Document):
 					"include": existing.get(table["fieldname"], 1),
 				},
 			)
+
+	def _sync_link_resolutions(self, groups):
+		prior = {(r.child_table, r.link_field, r.source_value): (r.action, r.map_to) for r in self.link_resolutions}
+		self.link_resolutions = []
+		for group in groups:
+			for value in group["values"]:
+				exists = bool(frappe.db.exists(group["link_doctype"], value))
+				action, map_to = prior.get(
+					(group["child_table"], group["link_field"], value),
+					("Keep" if exists else "Create New", None),
+				)
+				self.append(
+					"link_resolutions",
+					{
+						"child_table": group["child_table"],
+						"link_field": group["link_field"],
+						"link_doctype": group["link_doctype"],
+						"source_value": value,
+						"exists": exists,
+						"action": action,
+						"map_to": map_to,
+					},
+				)
 
 	def _reset_results(self):
 		for field in ("total_fetched", "created_count", "updated_count", "skipped_count", "failed_count"):
