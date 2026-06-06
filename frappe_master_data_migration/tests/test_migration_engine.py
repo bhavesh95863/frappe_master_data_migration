@@ -144,12 +144,13 @@ class TestEnsureRecordFallback(IntegrationTestCase):
 		self.assertEqual(ctx.counts["Created"], 1)
 
 
-class TestClearMissingRelated(IntegrationTestCase):
-	def test_clears_missing_primary_contact(self):
-		ctx = SimpleNamespace(related_link_fields=[{"fieldname": "customer_primary_contact", "options": "Contact"}])
+class TestDeferMissingRelated(IntegrationTestCase):
+	def test_defers_missing_primary_contact(self):
+		ctx = SimpleNamespace(related_link_map={"customer_primary_contact": "Contact"}, deferred_primary={})
 		doc = {"customer_primary_contact": "Does-Not-Exist-12345"}
-		engine._clear_missing_related(ctx, doc)
+		engine._defer_missing_related(ctx, "CUST-1", doc)
 		self.assertIsNone(doc["customer_primary_contact"])
+		self.assertEqual(ctx.deferred_primary["CUST-1"]["customer_primary_contact"], "Does-Not-Exist-12345")
 
 
 class TestInsert(IntegrationTestCase):

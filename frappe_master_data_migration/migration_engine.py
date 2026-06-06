@@ -64,11 +64,10 @@ class JobContext:
 			for field in all_link_fields
 			if field.options not in RELATED_DOCTYPES
 		]
-		self.related_link_fields = [
-			{"fieldname": field.fieldname, "options": field.options}
-			for field in all_link_fields
-			if field.options in RELATED_DOCTYPES
-		]
+		self.related_link_map = {
+			field.fieldname: field.options for field in all_link_fields if field.options in RELATED_DOCTYPES
+		}
+		self.deferred_primary = {}
 		self.include_linked = job.include_address_contact
 		self.ignore_validate = job.ignore_validations
 		self.linked_created = set()
@@ -108,11 +107,13 @@ def _run(job):
 		if _should_stop(job.name):
 			return _finalize(ctx, "Stopped")
 		records = _export(ctx, batch)
-		if ctx.include_linked:
-			_import_linked(ctx, [record["name"] for record in records])
+		batch_names = [record["name"] for record in records]
 		for record in records:
 			_import_record(ctx, record)
 			done += 1
+		if ctx.include_linked:
+			_import_linked(ctx, batch_names)
+		_apply_deferred_primaries(ctx, batch_names)
 		_save_counts(ctx)
 		_publish(job.name, done, len(names))
 		frappe.db.commit()
@@ -177,7 +178,6 @@ def _import_one(ctx, record):
 	_strip_excluded_children(ctx, doc_dict)
 	_apply_resolutions(ctx, doc_dict)
 	_apply_mappings(ctx, doc_dict)
-	_clear_missing_related(ctx, doc_dict)
 
 	missing = _missing_links(ctx, doc_dict)
 	if missing and ctx.job.missing_link_action == "Skip Record":
@@ -190,6 +190,7 @@ def _import_one(ctx, record):
 	if missing and ctx.job.missing_link_action == "Auto-create Stub":
 		_create_stubs(missing)
 
+	_defer_missing_related(ctx, name, doc_dict)
 	ignore_links = ctx.job.missing_link_action != "Skip Record"
 	if exists:
 		_update_existing(ctx.doctype, name, doc_dict, ignore_links, ctx.ignore_validate)
@@ -238,12 +239,21 @@ def _clean_children(data):
 				row.pop(key, None)
 
 
-def _clear_missing_related(ctx, doc_dict):
-	"""Primary Address/Contact links would crash on_update if they don't exist yet; keep only resolvable ones."""
-	for field in ctx.related_link_fields:
-		value = doc_dict.get(field["fieldname"])
-		if value and not frappe.db.exists(field["options"], value):
-			doc_dict[field["fieldname"]] = None
+def _defer_missing_related(ctx, name, doc_dict):
+	"""A primary Address/Contact that doesn't exist yet would crash the parent's on_update.
+	Blank it for the insert, remember it, and set it back (raw) once the linked docs are in."""
+	for fieldname, link_doctype in ctx.related_link_map.items():
+		value = doc_dict.get(fieldname)
+		if value and not frappe.db.exists(link_doctype, value):
+			ctx.deferred_primary.setdefault(name, {})[fieldname] = value
+			doc_dict[fieldname] = None
+
+
+def _apply_deferred_primaries(ctx, names):
+	for name in names:
+		for fieldname, value in ctx.deferred_primary.get(name, {}).items():
+			if frappe.db.exists(ctx.related_link_map[fieldname], value):
+				frappe.db.set_value(ctx.doctype, name, fieldname, value, update_modified=False)
 
 
 def _strip_excluded_children(ctx, doc_dict):
