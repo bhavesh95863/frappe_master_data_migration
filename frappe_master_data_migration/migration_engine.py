@@ -58,12 +58,19 @@ class JobContext:
 			}
 			for row in job.field_mappings
 		]
+		all_link_fields = frappe.get_meta(self.doctype).get_link_fields()
 		self.link_fields = [
 			{"fieldname": field.fieldname, "options": field.options}
-			for field in frappe.get_meta(self.doctype).get_link_fields()
+			for field in all_link_fields
 			if field.options not in RELATED_DOCTYPES
 		]
+		self.related_link_fields = [
+			{"fieldname": field.fieldname, "options": field.options}
+			for field in all_link_fields
+			if field.options in RELATED_DOCTYPES
+		]
 		self.include_linked = job.include_address_contact
+		self.ignore_validate = job.ignore_validations
 		self.linked_created = set()
 		self.resolutions = {
 			(row.child_table or "", row.link_field, row.source_value): {
@@ -91,6 +98,8 @@ def run_migration(migration_job: str | None = None):
 def _run(job):
 	frappe.db.delete("Migration Record Log", {"migration_job": job.name})
 	ctx = JobContext(job)
+	ctx.options_line = _options_summary(ctx)
+	job.db_set("run_log", ctx.options_line)
 	names = _fetch_all_names(ctx)
 	job.db_set("total_fetched", len(names))
 
@@ -99,11 +108,11 @@ def _run(job):
 		if _should_stop(job.name):
 			return _finalize(ctx, "Stopped")
 		records = _export(ctx, batch)
+		if ctx.include_linked:
+			_import_linked(ctx, [record["name"] for record in records])
 		for record in records:
 			_import_record(ctx, record)
 			done += 1
-		if ctx.include_linked:
-			_import_linked(ctx, [record["name"] for record in records])
 		_save_counts(ctx)
 		_publish(job.name, done, len(names))
 		frappe.db.commit()
@@ -129,11 +138,10 @@ def _import_record(ctx, record):
 
 
 def _import_linked(ctx, names):
-	present = [name for name in names if frappe.db.exists(ctx.doctype, name)]
-	if not present:
+	if not names:
 		return
 	try:
-		grouped = ctx.client.call("export_linked_documents", {"parent_doctype": ctx.doctype, "parent_names": present})
+		grouped = ctx.client.call("export_linked_documents", {"parent_doctype": ctx.doctype, "parent_names": names})
 	except Exception:
 		frappe.clear_last_message()
 		_log_record(ctx.job, ctx.doctype, "Failed", "Could not fetch linked Addresses/Contacts from source")
@@ -154,7 +162,7 @@ def _import_linked_doc(ctx, entry):
 	savepoint = "mdm_link"
 	frappe.db.savepoint(savepoint)
 	try:
-		_insert_new(doctype, name, entry["doc"], ignore_links=True)
+		_insert_new(doctype, name, entry["doc"], ignore_links=True, ignore_validate=ctx.ignore_validate)
 		_log_record(ctx.job, f"{doctype}: {name}", "Created", "Linked document")
 		ctx.counts["Created"] += 1
 	except Exception:
@@ -169,6 +177,7 @@ def _import_one(ctx, record):
 	_strip_excluded_children(ctx, doc_dict)
 	_apply_resolutions(ctx, doc_dict)
 	_apply_mappings(ctx, doc_dict)
+	_clear_missing_related(ctx, doc_dict)
 
 	missing = _missing_links(ctx, doc_dict)
 	if missing and ctx.job.missing_link_action == "Skip Record":
@@ -183,26 +192,28 @@ def _import_one(ctx, record):
 
 	ignore_links = ctx.job.missing_link_action != "Skip Record"
 	if exists:
-		_update_existing(ctx.doctype, name, doc_dict, ignore_links)
+		_update_existing(ctx.doctype, name, doc_dict, ignore_links, ctx.ignore_validate)
 		return "Updated", ""
 
-	_insert_new(ctx.doctype, name, doc_dict, ignore_links)
+	_insert_new(ctx.doctype, name, doc_dict, ignore_links, ctx.ignore_validate)
 	_import_extras(ctx, name, record)
 	note = _format_missing(missing) if missing else ""
 	return "Created", note
 
 
-def _insert_new(doctype, name, doc_dict, ignore_links):
+def _insert_new(doctype, name, doc_dict, ignore_links, ignore_validate=False):
 	doc = frappe.get_doc(_prepare(doc_dict, doctype, name))
 	doc.flags.name_set = True
 	doc.name = name
+	doc.flags.ignore_validate = ignore_validate
 	doc.insert(ignore_permissions=True, ignore_links=ignore_links)
 
 
-def _update_existing(doctype, name, doc_dict, ignore_links):
+def _update_existing(doctype, name, doc_dict, ignore_links, ignore_validate=False):
 	doc = frappe.get_doc(doctype, name)
 	doc.update(_prepare(doc_dict, doctype, name, for_update=True))
 	doc.flags.ignore_links = ignore_links
+	doc.flags.ignore_validate = ignore_validate
 	doc.save(ignore_permissions=True)
 
 
@@ -225,6 +236,14 @@ def _clean_children(data):
 		for row in data.get(field.fieldname) or []:
 			for key in CHILD_SYSTEM_FIELDS:
 				row.pop(key, None)
+
+
+def _clear_missing_related(ctx, doc_dict):
+	"""Primary Address/Contact links would crash on_update if they don't exist yet; keep only resolvable ones."""
+	for field in ctx.related_link_fields:
+		value = doc_dict.get(field["fieldname"])
+		if value and not frappe.db.exists(field["options"], value):
+			doc_dict[field["fieldname"]] = None
 
 
 def _strip_excluded_children(ctx, doc_dict):
@@ -266,7 +285,7 @@ def _ensure_record(ctx, link_doctype, value):
 	ctx.created_cache.add(value)
 	records = _safe_export(ctx, link_doctype, value)
 	if records:
-		_insert_new(link_doctype, value, records[0]["doc"], ignore_links=True)
+		_insert_new(link_doctype, value, records[0]["doc"], ignore_links=True, ignore_validate=ctx.ignore_validate)
 		_log_record(ctx.job, f"{link_doctype}: {value}", "Created", "Linked (created new)")
 	else:
 		_create_stub(link_doctype, value)
@@ -470,10 +489,19 @@ def _finalize(ctx, status=None):
 	_save_counts(ctx)
 	if not status:
 		status = "Completed with Errors" if ctx.counts["Failed"] else "Completed"
-	summary = ", ".join(f"{action}: {count}" for action, count in ctx.counts.items())
+	counts = ", ".join(f"{action}: {count}" for action, count in ctx.counts.items())
 	ctx.job.db_set("status", status)
-	ctx.job.db_set("run_log", summary)
+	ctx.job.db_set("run_log", f"{getattr(ctx, 'options_line', '')}\n{counts}")
 	frappe.db.commit()
+
+
+def _options_summary(ctx):
+	return (
+		f"Options — conflict: {ctx.job.on_conflict}, "
+		f"missing link: {ctx.job.missing_link_action}, "
+		f"skip validations: {bool(ctx.job.ignore_validations)}, "
+		f"addresses/contacts: {bool(ctx.include_linked)}"
+	)
 
 
 def _publish(job_name, done, total):

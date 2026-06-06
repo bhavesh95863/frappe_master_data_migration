@@ -18,6 +18,7 @@
   "section_break_rules",
   "on_conflict",
   "missing_link_action",
+  "ignore_validations",
   "section_break_extras",
   "include_files",
   "include_comments",
@@ -118,6 +119,13 @@
    "default": "Report & Continue",
    "label": "If a Linked Record is Missing",
    "reqd": 1
+  },
+  {
+   "fieldname": "ignore_validations",
+   "fieldtype": "Check",
+   "label": "Skip Validations (import raw data)",
+   "default": "0",
+   "description": "Bypass the target DocType's validate rules (e.g. 'account does not belong to company'). Use when the source data is trusted and destination-specific business rules block the import. May create records that violate those rules — prefer deselecting the offending child table or mapping its values when possible."
   },
   {
    "fieldname": "section_break_extras",

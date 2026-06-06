@@ -109,7 +109,7 @@ class TestLinkedDocs(IntegrationTestCase):
 		entry = {"doctype": "Address", "name": name, "doc": addr.as_dict(no_nulls=True)}
 		frappe.delete_doc("Address", name, force=True)
 
-		ctx = SimpleNamespace(job=job, linked_created=set(), counts={"Created": 0, "Failed": 0})
+		ctx = SimpleNamespace(job=job, linked_created=set(), counts={"Created": 0, "Failed": 0}, ignore_validate=False)
 		engine._import_linked_doc(ctx, entry)
 
 		self.assertTrue(frappe.db.exists("Address", name))
@@ -137,11 +137,19 @@ class TestEnsureRecordFallback(IntegrationTestCase):
 			def call(self, *args, **kwargs):
 				raise frappe.PermissionError("denied")
 
-		ctx = SimpleNamespace(job=job, client=FailClient(), created_cache=set(), counts={"Created": 0})
+		ctx = SimpleNamespace(job=job, client=FailClient(), created_cache=set(), counts={"Created": 0}, ignore_validate=False)
 		engine._ensure_record(ctx, "Brand", "MDM Stub Brand")
 
 		self.assertTrue(frappe.db.exists("Brand", "MDM Stub Brand"))
 		self.assertEqual(ctx.counts["Created"], 1)
+
+
+class TestClearMissingRelated(IntegrationTestCase):
+	def test_clears_missing_primary_contact(self):
+		ctx = SimpleNamespace(related_link_fields=[{"fieldname": "customer_primary_contact", "options": "Contact"}])
+		doc = {"customer_primary_contact": "Does-Not-Exist-12345"}
+		engine._clear_missing_related(ctx, doc)
+		self.assertIsNone(doc["customer_primary_contact"])
 
 
 class TestInsert(IntegrationTestCase):
