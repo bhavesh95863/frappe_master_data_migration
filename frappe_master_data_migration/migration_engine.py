@@ -87,12 +87,12 @@ class JobContext:
 
 def run_migration(migration_job: str | None = None):
 	job = frappe.get_doc("Migration Job", migration_job)
-	job.db_set("status", "Running")
+	job.db_set("status", "Running", update_modified=False)
 	try:
 		_run(job)
 	except Exception:
-		job.db_set("status", "Failed")
-		job.db_set("run_log", frappe.get_traceback())
+		job.db_set("status", "Failed", update_modified=False)
+		job.db_set("run_log", frappe.get_traceback(), update_modified=False)
 		raise
 
 
@@ -100,9 +100,9 @@ def _run(job):
 	frappe.db.delete("Migration Record Log", {"migration_job": job.name})
 	ctx = JobContext(job)
 	ctx.options_line = _options_summary(ctx)
-	job.db_set("run_log", ctx.options_line)
+	job.db_set("run_log", ctx.options_line, update_modified=False)
 	names = _fetch_all_names(ctx)
-	job.db_set("total_fetched", len(names))
+	job.db_set("total_fetched", len(names), update_modified=False)
 	_publish(job.name, 0, len(names))
 
 	done = 0
@@ -581,8 +581,8 @@ def _finalize(ctx, status=None):
 	if not status:
 		status = "Completed with Errors" if ctx.counts["Failed"] else "Completed"
 	counts = ", ".join(f"{action}: {count}" for action, count in ctx.counts.items())
-	ctx.job.db_set("status", status)
-	ctx.job.db_set("run_log", f"{getattr(ctx, 'options_line', '')}\n{counts}")
+	ctx.job.db_set("status", status, update_modified=False)
+	ctx.job.db_set("run_log", f"{getattr(ctx, 'options_line', '')}\n{counts}", update_modified=False)
 	frappe.db.commit()
 
 

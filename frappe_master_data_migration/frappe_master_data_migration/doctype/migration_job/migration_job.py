@@ -53,7 +53,7 @@ class MigrationJob(Document):
 	def stop_migration(self):
 		if self.status not in ("Queued", "Running"):
 			frappe.throw(_("Nothing to stop — migration is {0}").format(self.status))
-		self.db_set("status", "Stopping")
+		self.db_set("status", "Stopping", update_modified=False)
 		frappe.db.commit()
 		return self.status
 
