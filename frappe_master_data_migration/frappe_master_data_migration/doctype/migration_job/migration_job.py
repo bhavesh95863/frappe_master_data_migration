@@ -50,6 +50,13 @@ class MigrationJob(Document):
 		}
 
 	@frappe.whitelist(methods=["POST"])
+	def reset_status(self):
+		"""Recover a job left stuck in Queued/Running/Stopping by a worker that died."""
+		self.db_set("status", "Draft", update_modified=False)
+		frappe.db.commit()
+		return self.status
+
+	@frappe.whitelist(methods=["POST"])
 	def stop_migration(self):
 		if self.status not in ("Queued", "Running"):
 			frappe.throw(_("Nothing to stop — migration is {0}").format(self.status))

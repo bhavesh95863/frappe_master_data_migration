@@ -24,7 +24,7 @@ class RemoteClient:
 		url = self.base_url + API_PREFIX + method
 		payload = {k: _encode(v) for k, v in (params or {}).items()}
 		try:
-			response = requests.post(url, headers=self.headers, data=payload, timeout=120)
+			response = requests.post(url, headers=self.headers, data=payload, timeout=(10, 90))
 		except requests.RequestException as exc:
 			frappe.throw(_("Could not reach {0}: {1}").format(self.base_url, exc))
 

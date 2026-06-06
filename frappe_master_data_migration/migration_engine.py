@@ -13,7 +13,7 @@ from frappe import _
 from frappe_master_data_migration.remote_client import RemoteClient
 
 PAGE_SIZE = 200
-EXPORT_BATCH = 50
+EXPORT_BATCH = 20
 
 # Linked via the Dynamic Link "links" table (Address/Contact point back to the parent).
 # Migrated together with the parent and excluded from link resolution / validation.
@@ -85,11 +85,14 @@ class JobContext:
 		}
 		self.created_cache = set()
 		self.counts = {"Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0}
+		self.total = 0
+		self.done = 0
 
 	def snapshot(self):
 		"""In-memory state to restore if a batch is rolled back and retried after a deadlock."""
 		return {
 			"counts": dict(self.counts),
+			"done": self.done,
 			"created_cache": set(self.created_cache),
 			"linked_created": set(self.linked_created),
 			"deferred_primary": {k: dict(v) for k, v in self.deferred_primary.items()},
@@ -98,6 +101,7 @@ class JobContext:
 
 	def restore(self, snap):
 		self.counts = dict(snap["counts"])
+		self.done = snap["done"]
 		self.created_cache = set(snap["created_cache"])
 		self.linked_created = set(snap["linked_created"])
 		self.deferred_primary = {k: dict(v) for k, v in snap["deferred_primary"].items()}
@@ -106,6 +110,8 @@ class JobContext:
 
 def run_migration(migration_job: str | None = None):
 	job = frappe.get_doc("Migration Job", migration_job)
+	if job.status != "Queued":
+		return  # the job was reset/cancelled after this run was enqueued
 	_set_job(job, {"status": "Running"})
 	try:
 		_run(job)
@@ -121,17 +127,15 @@ def _run(job):
 	ctx = JobContext(job)
 	ctx.options_line = _options_summary(ctx)
 	names = _fetch_all_names(ctx)
-	_set_job(job, {"run_log": ctx.options_line, "total_fetched": len(names)})
-	_publish(job.name, 0, len(names))
+	ctx.total = len(names)
+	_set_job(job, {"run_log": ctx.options_line, "total_fetched": ctx.total})
+	_publish(job.name, 0, ctx.total)
 
-	done = 0
 	for batch in _batches(names, EXPORT_BATCH):
 		if _should_stop(job.name):
 			return _finalize(ctx, "Stopped")
 		_import_batch_with_retry(ctx, batch)
-		done += len(batch)
-		_report_progress(job, ctx, done)
-		_publish(job.name, done, len(names))
+		_report_progress(job, ctx)
 
 	_finalize(ctx)
 
@@ -158,6 +162,7 @@ def _log_deadlock(ctx, batch):
 	for name in batch:
 		_log_record(ctx.job, name, "Failed", "Skipped after repeated database deadlocks")
 		ctx.counts["Failed"] += 1
+		ctx.done += 1
 	frappe.db.commit()
 
 
@@ -173,8 +178,8 @@ def _import_batch(ctx, batch):
 		_set_primaries(ctx, batch_names)
 
 
-def _report_progress(job, ctx, done):
-	values = {"processed_count": done}
+def _report_progress(job, ctx):
+	values = {"processed_count": ctx.done}
 	for action, count in ctx.counts.items():
 		values[f"{action.lower()}_count"] = count
 	_set_job(job, values)
@@ -220,6 +225,8 @@ def _import_record(ctx, record):
 		frappe.db.rollback(save_point=savepoint)
 		_log_record(ctx.job, record["name"], "Failed", frappe.get_traceback()[:2000])
 		ctx.counts["Failed"] += 1
+	ctx.done += 1
+	_publish(ctx.job.name, ctx.done, ctx.total)
 
 
 def _import_linked(ctx, names):
@@ -299,7 +306,7 @@ def _insert_new(doctype, name, doc_dict, ignore_links, ignore_validate=False):
 	doc.flags.name_set = True
 	doc.name = name
 	doc.flags.ignore_validate = ignore_validate
-	doc.insert(ignore_permissions=True, ignore_links=ignore_links)
+	doc.insert(ignore_permissions=True, ignore_links=ignore_links, ignore_mandatory=ignore_validate)
 
 
 def _update_existing(doctype, name, doc_dict, ignore_links, ignore_validate=False):
@@ -307,6 +314,7 @@ def _update_existing(doctype, name, doc_dict, ignore_links, ignore_validate=Fals
 	doc.update(_prepare(doc_dict, doctype, name, for_update=True))
 	doc.flags.ignore_links = ignore_links
 	doc.flags.ignore_validate = ignore_validate
+	doc.flags.ignore_mandatory = ignore_validate
 	doc.save(ignore_permissions=True)
 
 
@@ -585,6 +593,8 @@ def _fetch_all_names(ctx):
 	start = 0
 	cap = ctx.job.record_limit or 0
 	while True:
+		if _should_stop(ctx.job.name):
+			return names
 		result = ctx.client.call(
 			"list_record_names",
 			{
@@ -657,6 +667,7 @@ def _finalize(ctx, status=None):
 		status = "Completed with Errors" if ctx.counts["Failed"] else "Completed"
 	counts = ", ".join(f"{action}: {count}" for action, count in ctx.counts.items())
 	values = {action.lower() + "_count": count for action, count in ctx.counts.items()}
+	values["processed_count"] = ctx.done
 	values["status"] = status
 	values["run_log"] = f"{getattr(ctx, 'options_line', '')}\n{counts}"
 	_set_job(ctx.job, values)

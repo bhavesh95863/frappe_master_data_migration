@@ -17,6 +17,7 @@ frappe.ui.form.on("Migration Job", {
 			frm.add_custom_button(__("Stop Migration"), () => stop_migration(frm)).addClass(
 				"btn-danger"
 			);
+			frm.add_custom_button(__("Reset (force)"), () => reset_status(frm));
 		}
 
 		frm.add_custom_button(__("View Results"), () => {
@@ -163,6 +164,20 @@ function stop_migration(frm) {
 			}
 		});
 	});
+}
+
+function reset_status(frm) {
+	frappe.confirm(
+		__("Force-reset this job to Draft? Only do this if it's stuck (the worker died). It does not stop a worker that is still running."),
+		() => {
+			frm.call("reset_status").then((r) => {
+				if (!r.exc) {
+					frappe.show_alert({ message: __("Reset to Draft"), indicator: "blue" });
+					frm.reload_doc();
+				}
+			});
+		}
+	);
 }
 
 function start_migration(frm) {
