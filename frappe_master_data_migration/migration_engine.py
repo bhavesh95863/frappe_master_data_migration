@@ -5,6 +5,8 @@ applying value-mapping rules, child-table selection and link-resolution policy. 
 background worker, enqueued from Migration Job.start_migration.
 """
 
+import time
+
 import frappe
 from frappe import _
 
@@ -84,47 +86,121 @@ class JobContext:
 		self.created_cache = set()
 		self.counts = {"Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0}
 
+	def snapshot(self):
+		"""In-memory state to restore if a batch is rolled back and retried after a deadlock."""
+		return {
+			"counts": dict(self.counts),
+			"created_cache": set(self.created_cache),
+			"linked_created": set(self.linked_created),
+			"deferred_primary": {k: dict(v) for k, v in self.deferred_primary.items()},
+			"linked_by_parent": {k: {dt: list(v) for dt, v in m.items()} for k, m in self.linked_by_parent.items()},
+		}
+
+	def restore(self, snap):
+		self.counts = dict(snap["counts"])
+		self.created_cache = set(snap["created_cache"])
+		self.linked_created = set(snap["linked_created"])
+		self.deferred_primary = {k: dict(v) for k, v in snap["deferred_primary"].items()}
+		self.linked_by_parent = {k: {dt: list(v) for dt, v in m.items()} for k, m in snap["linked_by_parent"].items()}
+
 
 def run_migration(migration_job: str | None = None):
 	job = frappe.get_doc("Migration Job", migration_job)
-	job.db_set("status", "Running", update_modified=False)
+	_set_job(job, {"status": "Running"})
 	try:
 		_run(job)
 	except Exception:
-		job.db_set("status", "Failed", update_modified=False)
-		job.db_set("run_log", frappe.get_traceback(), update_modified=False)
+		frappe.db.rollback()
+		_set_job(job, {"status": "Failed", "run_log": frappe.get_traceback()})
 		raise
 
 
 def _run(job):
 	frappe.db.delete("Migration Record Log", {"migration_job": job.name})
+	frappe.db.commit()
 	ctx = JobContext(job)
 	ctx.options_line = _options_summary(ctx)
-	job.db_set("run_log", ctx.options_line, update_modified=False)
 	names = _fetch_all_names(ctx)
-	job.db_set("total_fetched", len(names), update_modified=False)
+	_set_job(job, {"run_log": ctx.options_line, "total_fetched": len(names)})
 	_publish(job.name, 0, len(names))
 
 	done = 0
 	for batch in _batches(names, EXPORT_BATCH):
 		if _should_stop(job.name):
 			return _finalize(ctx, "Stopped")
-		records = _safe_export_batch(ctx, batch)
-		batch_names = [record["name"] for record in records]
-		for record in records:
-			_import_record(ctx, record)
-		if ctx.include_linked:
-			_import_linked(ctx, batch_names)
-		_apply_deferred_primaries(ctx, batch_names)
-		if ctx.include_linked:
-			_set_primaries(ctx, batch_names)
+		_import_batch_with_retry(ctx, batch)
 		done += len(batch)
-		job.db_set("processed_count", done, update_modified=False)
-		_save_counts(ctx)
+		_report_progress(job, ctx, done)
 		_publish(job.name, done, len(names))
-		frappe.db.commit()
 
 	_finalize(ctx)
+
+
+def _import_batch_with_retry(ctx, batch, attempts=3):
+	"""Import a batch, committing its data before any job-row write. On a DB deadlock, roll back,
+	restore in-memory counters, and retry the whole batch so nothing is double-counted."""
+	snap = ctx.snapshot()
+	for attempt in range(attempts):
+		try:
+			_import_batch(ctx, batch)
+			frappe.db.commit()  # release all record locks here, before the job row is touched
+			return
+		except frappe.QueryDeadlockError:
+			frappe.db.rollback()
+			ctx.restore(snap)
+			if attempt == attempts - 1:
+				_log_deadlock(ctx, batch)
+				return
+			time.sleep(0.3 * (attempt + 1))
+
+
+def _log_deadlock(ctx, batch):
+	for name in batch:
+		_log_record(ctx.job, name, "Failed", "Skipped after repeated database deadlocks")
+		ctx.counts["Failed"] += 1
+	frappe.db.commit()
+
+
+def _import_batch(ctx, batch):
+	records = _safe_export_batch(ctx, batch)
+	batch_names = [record["name"] for record in records]
+	for record in records:
+		_import_record(ctx, record)
+	if ctx.include_linked:
+		_import_linked(ctx, batch_names)
+	_apply_deferred_primaries(ctx, batch_names)
+	if ctx.include_linked:
+		_set_primaries(ctx, batch_names)
+
+
+def _report_progress(job, ctx, done):
+	values = {"processed_count": done}
+	for action, count in ctx.counts.items():
+		values[f"{action.lower()}_count"] = count
+	_set_job(job, values)
+
+
+def _set_job(job, values):
+	"""Update job fields in a tiny, isolated transaction that holds no other locks — retried
+	on deadlock so a busy DB never aborts the migration over a progress write."""
+	def apply():
+		for field, value in values.items():
+			job.db_set(field, value, update_modified=False)
+
+	_commit_with_retry(apply)
+
+
+def _commit_with_retry(apply, attempts=5):
+	for attempt in range(attempts):
+		try:
+			apply()
+			frappe.db.commit()
+			return
+		except frappe.QueryDeadlockError:
+			frappe.db.rollback()
+			if attempt == attempts - 1:
+				return
+			time.sleep(0.2 * (attempt + 1))
 
 
 def _should_stop(job_name):
@@ -138,6 +214,8 @@ def _import_record(ctx, record):
 		action, message = _import_one(ctx, record)
 		_log_record(ctx.job, record["name"], action, message)
 		ctx.counts[action] += 1
+	except frappe.QueryDeadlockError:
+		raise  # let the batch roll back and retry — the whole transaction is already aborted
 	except Exception:
 		frappe.db.rollback(save_point=savepoint)
 		_log_record(ctx.job, record["name"], "Failed", frappe.get_traceback()[:2000])
@@ -175,6 +253,8 @@ def _import_linked_doc(ctx, entry):
 		_preserve_audit(doctype, name, entry["doc"])
 		_log_record(ctx.job, f"{doctype}: {name}", "Created", "Linked document")
 		ctx.counts["Created"] += 1
+	except frappe.QueryDeadlockError:
+		raise
 	except Exception:
 		frappe.db.rollback(save_point=savepoint)
 		_log_record(ctx.job, f"{doctype}: {name}", "Failed", frappe.get_traceback()[:2000])
@@ -571,19 +651,15 @@ def _log_record(job, source_name, action, message):
 	).insert(ignore_permissions=True)
 
 
-def _save_counts(ctx):
-	for action, count in ctx.counts.items():
-		ctx.job.db_set(f"{action.lower()}_count", count, update_modified=False)
-
-
 def _finalize(ctx, status=None):
-	_save_counts(ctx)
+	frappe.db.commit()  # ensure imported data is committed before the job-row update
 	if not status:
 		status = "Completed with Errors" if ctx.counts["Failed"] else "Completed"
 	counts = ", ".join(f"{action}: {count}" for action, count in ctx.counts.items())
-	ctx.job.db_set("status", status, update_modified=False)
-	ctx.job.db_set("run_log", f"{getattr(ctx, 'options_line', '')}\n{counts}", update_modified=False)
-	frappe.db.commit()
+	values = {action.lower() + "_count": count for action, count in ctx.counts.items()}
+	values["status"] = status
+	values["run_log"] = f"{getattr(ctx, 'options_line', '')}\n{counts}"
+	_set_job(ctx.job, values)
 
 
 def _options_summary(ctx):

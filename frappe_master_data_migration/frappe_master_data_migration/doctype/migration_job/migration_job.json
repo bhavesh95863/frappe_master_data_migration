@@ -47,31 +47,31 @@
   {
    "fieldname": "connection",
    "fieldtype": "Link",
-   "options": "Migration Connection",
+   "in_list_view": 1,
    "label": "Connection",
-   "reqd": 1,
-   "in_list_view": 1
+   "options": "Migration Connection",
+   "reqd": 1
   },
   {
+   "description": "Name of the DocType to pull from the source site, e.g. Customer",
    "fieldname": "source_doctype",
    "fieldtype": "Data",
-   "label": "Source DocType",
-   "reqd": 1,
    "in_list_view": 1,
-   "description": "Name of the DocType to pull from the source site, e.g. Customer"
+   "label": "Source DocType",
+   "reqd": 1
   },
   {
    "fieldname": "column_break_src",
    "fieldtype": "Column Break"
   },
   {
+   "default": "Draft",
    "fieldname": "status",
    "fieldtype": "Select",
-   "options": "Draft\nQueued\nRunning\nStopping\nStopped\nCompleted\nCompleted with Errors\nFailed",
-   "default": "Draft",
+   "in_list_view": 1,
    "label": "Status",
-   "read_only": 1,
-   "in_list_view": 1
+   "options": "Draft\nQueued\nRunning\nStopping\nStopped\nCompleted\nCompleted with Errors\nFailed",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_scope",
@@ -79,26 +79,26 @@
    "label": "Scope"
   },
   {
+   "description": "Optional. Frappe filters as JSON, e.g. {\"disabled\": 0} or [[\"creation\", \">\", \"2024-01-01\"]]",
    "fieldname": "filters_json",
    "fieldtype": "Small Text",
-   "label": "Filters (JSON)",
-   "description": "Optional. Frappe filters as JSON, e.g. {\"disabled\": 0} or [[\"creation\", \">\", \"2024-01-01\"]]"
+   "label": "Filters (JSON)"
   },
   {
+   "description": "Optional. Only pull records modified after this time (incremental sync).",
    "fieldname": "modified_after",
    "fieldtype": "Datetime",
-   "label": "Modified After",
-   "description": "Optional. Only pull records modified after this time (incremental sync)."
+   "label": "Modified After"
   },
   {
    "fieldname": "column_break_scope",
    "fieldtype": "Column Break"
   },
   {
+   "description": "Optional cap on number of records (0 = all).",
    "fieldname": "record_limit",
    "fieldtype": "Int",
-   "label": "Record Limit",
-   "description": "Optional cap on number of records (0 = all)."
+   "label": "Record Limit"
   },
   {
    "fieldname": "section_break_rules",
@@ -106,27 +106,27 @@
    "label": "Rules"
   },
   {
+   "default": "Skip",
    "fieldname": "on_conflict",
    "fieldtype": "Select",
-   "options": "Skip\nOverwrite",
-   "default": "Skip",
    "label": "If Record Already Exists",
+   "options": "Skip\nOverwrite",
    "reqd": 1
   },
   {
+   "default": "Report & Continue",
    "fieldname": "missing_link_action",
    "fieldtype": "Select",
-   "options": "Report & Continue\nAuto-create Stub\nSkip Record",
-   "default": "Report & Continue",
    "label": "If a Linked Record is Missing",
+   "options": "Report & Continue\nAuto-create Stub\nSkip Record",
    "reqd": 1
   },
   {
+   "default": "1",
+   "description": "Bypass the target DocType's validate rules (e.g. 'account does not belong to company'). Use when the source data is trusted and destination-specific business rules block the import. May create records that violate those rules \u2014 prefer deselecting the offending child table or mapping its values when possible.",
    "fieldname": "ignore_validations",
    "fieldtype": "Check",
-   "label": "Skip Validations (import raw data)",
-   "default": "0",
-   "description": "Bypass the target DocType's validate rules (e.g. 'account does not belong to company'). Use when the source data is trusted and destination-specific business rules block the import. May create records that violate those rules — prefer deselecting the offending child table or mapping its values when possible."
+   "label": "Skip Validations (import raw data)"
   },
   {
    "fieldname": "section_break_extras",
@@ -134,75 +134,75 @@
    "label": "What to Transfer"
   },
   {
+   "default": "1",
    "fieldname": "include_files",
    "fieldtype": "Check",
-   "label": "Include File Attachments",
-   "default": "0"
+   "label": "Include File Attachments"
   },
   {
+   "default": "1",
    "fieldname": "include_comments",
    "fieldtype": "Check",
-   "label": "Include Comments",
-   "default": "0"
+   "label": "Include Comments"
   },
   {
    "fieldname": "column_break_extras",
    "fieldtype": "Column Break"
   },
   {
+   "default": "1",
    "fieldname": "include_versions",
    "fieldtype": "Check",
-   "label": "Include Version History",
-   "default": "0"
+   "label": "Include Version History"
   },
   {
+   "default": "0",
    "fieldname": "include_assignments_tags",
    "fieldtype": "Check",
-   "label": "Include Assignments & Tags",
-   "default": "0"
+   "label": "Include Assignments & Tags"
   },
   {
+   "default": "0",
+   "description": "Also migrate all Addresses & Contacts linked to each record (e.g. a Customer's or Supplier's addresses). These are kept out of the Link Resolution list.",
    "fieldname": "include_address_contact",
    "fieldtype": "Check",
-   "label": "Include linked Addresses & Contacts",
-   "default": "0",
-   "description": "Also migrate all Addresses & Contacts linked to each record (e.g. a Customer's or Supplier's addresses). These are kept out of the Link Resolution list."
+   "label": "Include linked Addresses & Contacts"
   },
   {
+   "description": "Click 'Fetch Meta' to load the child tables of the selected DocType, then deselect any you don't want.",
    "fieldname": "section_break_children",
    "fieldtype": "Section Break",
-   "label": "Child Tables",
-   "description": "Click 'Fetch Meta' to load the child tables of the selected DocType, then deselect any you don't want."
+   "label": "Child Tables"
   },
   {
    "fieldname": "child_tables",
    "fieldtype": "Table",
-   "options": "Migration Child Table Option",
-   "label": "Child Tables"
+   "label": "Child Tables",
+   "options": "Migration Child Table Option"
   },
   {
+   "description": "Click 'Analyze Links' to load every distinct Link value used in the source (parent + selected child tables). For each value choose Keep, Map (pick an existing record here), or Create New (pull it from the source).",
    "fieldname": "section_break_links",
    "fieldtype": "Section Break",
-   "label": "Link Resolution",
-   "description": "Click 'Analyze Links' to load every distinct Link value used in the source (parent + selected child tables). For each value choose Keep, Map (pick an existing record here), or Create New (pull it from the source)."
+   "label": "Link Resolution"
   },
   {
    "fieldname": "link_resolutions",
    "fieldtype": "Table",
-   "options": "Migration Link Resolution",
-   "label": "Link Resolutions"
+   "label": "Link Resolutions",
+   "options": "Migration Link Resolution"
   },
   {
+   "description": "Transform field values during import. Remap Company 'Acme Pvt Ltd' to 'Acme Limited', or scope a rule to a child table (e.g. set Company / clear income_account inside item_defaults or accounts) so company-specific defaults resolve on this site. To skip company-specific defaults entirely, deselect that child table above.",
    "fieldname": "section_break_mappings",
    "fieldtype": "Section Break",
-   "label": "Value Mapping Rules",
-   "description": "Transform field values during import. Remap Company 'Acme Pvt Ltd' to 'Acme Limited', or scope a rule to a child table (e.g. set Company / clear income_account inside item_defaults or accounts) so company-specific defaults resolve on this site. To skip company-specific defaults entirely, deselect that child table above."
+   "label": "Value Mapping Rules"
   },
   {
    "fieldname": "field_mappings",
    "fieldtype": "Table",
-   "options": "Migration Field Map",
-   "label": "Field Mappings"
+   "label": "Field Mappings",
+   "options": "Migration Field Map"
   },
   {
    "fieldname": "section_break_results",
@@ -257,17 +257,18 @@
   {
    "fieldname": "run_log",
    "fieldtype": "Code",
-   "options": "Text",
    "label": "Run Log",
+   "options": "Text",
    "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-06 00:00:00",
+ "modified": "2026-06-06 17:02:16.884629",
  "modified_by": "Administrator",
  "module": "Frappe Master Data Migration",
  "name": "Migration Job",
+ "naming_rule": "Expression (old style)",
  "owner": "Administrator",
  "permissions": [
   {
@@ -283,6 +284,7 @@
    "write": 1
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
