@@ -319,11 +319,41 @@ def _import_one(ctx, record):
 	return action, note
 
 
+LIFECYCLE_METHODS = {
+	"before_validate",
+	"validate",
+	"before_save",
+	"before_insert",
+	"after_insert",
+	"on_update",
+	"on_change",
+	"before_submit",
+	"on_submit",
+	"on_update_after_submit",
+}
+
+
+def _disable_hooks(doc):
+	"""Raw-import mode: skip controller lifecycle methods + doc_events (on_update etc.) so app
+	side-effects (hrms approver roles, GST hooks, welcome emails, primary-contact, …) can't fail
+	the import. Frappe's own post-save bookkeeping (naming, cache, search) still runs."""
+	original = doc.run_method
+
+	def run_method(method, *args, **kwargs):
+		if method in LIFECYCLE_METHODS:
+			return None
+		return original(method, *args, **kwargs)
+
+	doc.run_method = run_method
+
+
 def _insert_new(doctype, name, doc_dict, ignore_links, ignore_validate=False):
 	doc = frappe.get_doc(_prepare(doc_dict, doctype, name))
 	doc.flags.name_set = True
 	doc.name = name
 	doc.flags.ignore_validate = ignore_validate
+	if ignore_validate:
+		_disable_hooks(doc)
 	doc.insert(ignore_permissions=True, ignore_links=ignore_links, ignore_mandatory=ignore_validate)
 
 
@@ -333,6 +363,8 @@ def _update_existing(doctype, name, doc_dict, ignore_links, ignore_validate=Fals
 	doc.flags.ignore_links = ignore_links
 	doc.flags.ignore_validate = ignore_validate
 	doc.flags.ignore_mandatory = ignore_validate
+	if ignore_validate:
+		_disable_hooks(doc)
 	doc.save(ignore_permissions=True)
 
 

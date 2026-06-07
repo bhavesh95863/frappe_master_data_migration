@@ -124,7 +124,7 @@
   },
   {
    "default": "1",
-   "description": "Bypass the target DocType's validate rules (e.g. 'account does not belong to company'). Use when the source data is trusted and destination-specific business rules block the import. May create records that violate those rules \u2014 prefer deselecting the offending child table or mapping its values when possible.",
+   "description": "Raw import: bypass the target DocType's validate rules AND its controller lifecycle hooks (validate / before_save / on_update etc.) so app side-effects \u2014 e.g. hrms approver roles, GST address hooks, welcome emails, auto primary-contact \u2014 cannot fail the import. Use when the source data is trusted and destination business rules/automations block the import. May create records that skip those rules.",
    "fieldname": "ignore_validations",
    "fieldtype": "Check",
    "label": "Skip Validations (import raw data)"
