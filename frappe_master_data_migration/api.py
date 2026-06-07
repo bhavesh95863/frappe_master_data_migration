@@ -179,7 +179,7 @@ def _get_files(doctype, name):
 	files = frappe.get_all(
 		"File",
 		filters={"attached_to_doctype": doctype, "attached_to_name": name},
-		fields=["name", "file_name", "is_private", "creation", "owner"],
+		fields=["name", "file_name", "file_url", "is_private", "creation", "owner"],
 	)
 	result = []
 	for entry in files:
@@ -189,6 +189,7 @@ def _get_files(doctype, name):
 		result.append(
 			{
 				"file_name": entry["file_name"],
+				"file_url": entry["file_url"],
 				"is_private": entry["is_private"],
 				"content_base64": base64.b64encode(content).decode(),
 				"creation": str(entry["creation"]),

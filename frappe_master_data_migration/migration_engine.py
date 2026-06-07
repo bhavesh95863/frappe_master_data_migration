@@ -294,8 +294,15 @@ def _import_one(ctx, record):
 
 	if missing and ctx.job.missing_link_action == "Auto-create Stub":
 		_create_stubs(missing)
+		missing = _missing_links(ctx, doc_dict)
+
+	if missing and ctx.job.missing_link_action == "Report & Continue":
+		# Blank dangling links so on_update hooks that load them (e.g. hrms leave_approver) don't crash.
+		for link in missing:
+			doc_dict[link["fieldname"]] = None
 
 	_defer_missing_related(ctx, name, doc_dict)
+	deferred_attach = _strip_attach_fields(ctx, doc_dict)
 	ignore_links = ctx.job.missing_link_action != "Skip Record"
 	if exists:
 		_update_existing(ctx.doctype, name, doc_dict, ignore_links, ctx.ignore_validate)
@@ -307,6 +314,7 @@ def _import_one(ctx, record):
 	if ctx.preserve_audit:
 		_preserve_audit(ctx.doctype, name, doc_dict)
 	_import_extras(ctx, name, record)
+	_restore_attach_fields(ctx, name, deferred_attach, record.get("files") or [])
 	note = _format_missing(missing) if missing else ""
 	return action, note
 
@@ -354,6 +362,32 @@ def _clean_children(data):
 		for row in data.get(field.fieldname) or []:
 			for key in CHILD_SYSTEM_FIELDS:
 				row.pop(key, None)
+
+
+def _strip_attach_fields(ctx, doc_dict):
+	"""Remove Attach/Attach Image values before insert so Frappe's attach_files_to_document hook
+	doesn't auto-create a (duplicate, often broken) File for them. Restored after files import."""
+	deferred = {}
+	for field in frappe.get_meta(ctx.doctype).get("fields", {"fieldtype": ["in", ["Attach", "Attach Image"]]}):
+		value = doc_dict.get(field.fieldname)
+		if value and str(value).startswith(("/files", "/private/files")):
+			deferred[field.fieldname] = value
+			doc_dict[field.fieldname] = None
+	return deferred
+
+
+def _restore_attach_fields(ctx, name, deferred, source_files):
+	if not deferred:
+		return
+	url_to_name = {f.get("file_url"): f.get("file_name") for f in source_files}
+	for fieldname, source_url in deferred.items():
+		file_name = url_to_name.get(source_url)
+		new_url = None
+		if file_name:
+			new_url = frappe.db.get_value(
+				"File", {"attached_to_doctype": ctx.doctype, "attached_to_name": name, "file_name": file_name}, "file_url"
+			)
+		frappe.db.set_value(ctx.doctype, name, fieldname, new_url or source_url, update_modified=False)
 
 
 def _defer_missing_related(ctx, name, doc_dict):

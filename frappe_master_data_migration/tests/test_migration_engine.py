@@ -242,6 +242,35 @@ class TestFileDedup(IntegrationTestCase):
 		self.assertEqual(frappe.db.count("File", {"attached_to_name": note.name, "file_name": "d.txt"}), 1)
 
 
+class TestAttachField(IntegrationTestCase):
+	def test_attach_field_does_not_double(self):
+		import base64
+
+		conn = frappe.get_doc(
+			{
+				"doctype": "Migration Connection",
+				"connection_name": "Attach Test",
+				"remote_url": "http://localhost",
+				"api_key": "k",
+				"api_secret": "s",
+			}
+		).insert()
+		job = frappe.get_doc(
+			{"doctype": "Migration Job", "connection": conn.name, "source_doctype": "Letter Head", "include_files": 1}
+		).insert()
+		ctx = engine.JobContext(job)
+		ctx.total = 1
+
+		png = base64.b64encode(b"\x89PNG\r\n").decode()
+		doc = {"name": "MDM ATT", "letter_head_name": "MDM ATT", "source": "Image", "image": "/files/mdmlogo.png", "content": "x"}
+		files = [{"file_name": "MDM Logo.png", "file_url": "/files/mdmlogo.png", "is_private": 0, "content_base64": png}]
+		engine._import_record(ctx, {"name": "MDM ATT", "doc": doc, "files": files})
+
+		count = frappe.db.count("File", {"attached_to_doctype": "Letter Head", "attached_to_name": "MDM ATT"})
+		self.assertEqual(count, 1)
+		self.assertEqual(frappe.db.get_value("Letter Head", "MDM ATT", "image"), "/files/MDM Logo.png")
+
+
 class TestInsert(IntegrationTestCase):
 	def test_insert_preserves_name_and_children(self):
 		note = frappe.get_doc(
