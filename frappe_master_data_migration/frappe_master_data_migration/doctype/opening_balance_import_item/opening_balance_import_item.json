@@ -1,0 +1,182 @@
+{
+ "actions": [],
+ "creation": "2026-06-25 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "source_item_code",
+  "source_item_name",
+  "source_warehouse",
+  "source_uom",
+  "source_qty",
+  "source_valuation_rate",
+  "action",
+  "column_break_map",
+  "target_item",
+  "target_warehouse",
+  "target_uom",
+  "conversion_factor",
+  "qty",
+  "valuation_rate",
+  "stock_qty",
+  "target_has_batch",
+  "target_has_serial",
+  "batch_no",
+  "mapped"
+ ],
+ "fields": [
+  {
+   "fieldname": "source_item_code",
+   "fieldtype": "Data",
+   "label": "Source Item Code",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "source_item_name",
+   "fieldtype": "Data",
+   "label": "Source Item Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_warehouse",
+   "fieldtype": "Data",
+   "label": "Source Warehouse",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "source_uom",
+   "fieldtype": "Data",
+   "label": "Source UOM",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_qty",
+   "fieldtype": "Float",
+   "label": "Source Qty",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "source_valuation_rate",
+   "fieldtype": "Currency",
+   "label": "Source Valuation Rate",
+   "read_only": 1
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "Map\nSkip",
+   "default": "Map",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "column_break_map",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "target_item",
+   "fieldtype": "Link",
+   "options": "Item",
+   "label": "Target Item",
+   "in_list_view": 1,
+   "columns": 2,
+   "depends_on": "eval:doc.action=='Map'",
+   "mandatory_depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "target_warehouse",
+   "fieldtype": "Link",
+   "options": "Warehouse",
+   "label": "Target Warehouse",
+   "in_list_view": 1,
+   "columns": 2,
+   "depends_on": "eval:doc.action=='Map'",
+   "mandatory_depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "target_uom",
+   "fieldtype": "Link",
+   "options": "UOM",
+   "label": "Target UOM",
+   "depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "conversion_factor",
+   "fieldtype": "Float",
+   "label": "Conversion Factor",
+   "default": "1",
+   "description": "Stock-UOM units per one Target UOM. nos→box where 1 box = 12 nos → 12.",
+   "depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "label": "Qty (in Target UOM)",
+   "in_list_view": 1,
+   "columns": 1,
+   "depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "valuation_rate",
+   "fieldtype": "Currency",
+   "label": "Valuation Rate (per stock UOM)",
+   "depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "stock_qty",
+   "fieldtype": "Float",
+   "label": "Stock Qty",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1,
+   "depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "target_has_batch",
+   "fieldtype": "Check",
+   "label": "Batch Tracked",
+   "read_only": 1,
+   "depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "target_has_serial",
+   "fieldtype": "Check",
+   "label": "Serial Tracked",
+   "read_only": 1,
+   "depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "batch_no",
+   "fieldtype": "Data",
+   "label": "Opening Batch No",
+   "description": "Blank = auto-create one batch from the item's batch number series.",
+   "depends_on": "eval:doc.action=='Map' && doc.target_has_batch"
+  },
+  {
+   "fieldname": "mapped",
+   "fieldtype": "Check",
+   "label": "Posted",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-25 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Master Data Migration",
+ "name": "Opening Balance Import Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,149 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:OBI-{#####}",
+ "creation": "2026-06-25 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "connection",
+  "company",
+  "column_break_head",
+  "as_of_date",
+  "status",
+  "section_break_scope",
+  "source_warehouse_filter",
+  "item_group_filter",
+  "column_break_scope",
+  "default_expense_account",
+  "save_uom_conversions",
+  "section_break_items",
+  "items",
+  "section_break_results",
+  "created_entries"
+ ],
+ "fields": [
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Connection",
+   "options": "Migration Connection",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Opening balance is taken as of end of this date and the Stock Reconciliation is posted on it.",
+   "fieldname": "as_of_date",
+   "fieldtype": "Date",
+   "label": "As of Date",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nFetched\nPosted",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_scope",
+   "fieldtype": "Section Break",
+   "label": "Fetch Scope"
+  },
+  {
+   "description": "Optional. Source warehouse name to restrict the pull.",
+   "fieldname": "source_warehouse_filter",
+   "fieldtype": "Data",
+   "label": "Source Warehouse Filter"
+  },
+  {
+   "description": "Optional. Source item group to restrict the pull.",
+   "fieldname": "item_group_filter",
+   "fieldtype": "Data",
+   "label": "Source Item Group Filter"
+  },
+  {
+   "fieldname": "column_break_scope",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Difference / expense account used by the Stock Reconciliation for opening valuation.",
+   "fieldname": "default_expense_account",
+   "fieldtype": "Link",
+   "label": "Difference Account",
+   "options": "Account"
+  },
+  {
+   "default": "1",
+   "description": "When a row changes UOM (e.g. nos→box), write that conversion into the target Item's UOM Conversion table so future transactions know the factor. Existing conversions with a different factor are left untouched and reported.",
+   "fieldname": "save_uom_conversions",
+   "fieldtype": "Check",
+   "label": "Save UOM Conversions to Item"
+  },
+  {
+   "description": "Click 'Fetch Balances' to pull item balances from the source as of the date. For each row pick the Target Item, Target Warehouse, and (if the UOM differs) the Target UOM + Conversion Factor, then edit Qty. Set Action to Skip to exclude a row.",
+   "fieldname": "section_break_items",
+   "fieldtype": "Section Break",
+   "label": "Item Balances"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Opening Balance Import Item"
+  },
+  {
+   "fieldname": "section_break_results",
+   "fieldtype": "Section Break",
+   "label": "Results"
+  },
+  {
+   "fieldname": "created_entries",
+   "fieldtype": "Small Text",
+   "label": "Created Stock Reconciliations",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-25 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Master Data Migration",
+ "name": "Opening Balance Import",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

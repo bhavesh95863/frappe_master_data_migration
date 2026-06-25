@@ -84,6 +84,59 @@ def export_records(
 
 
 @frappe.whitelist()
+def export_item_balances(
+	as_of_date: str | None = None,
+	warehouse: str | None = None,
+	item_group: str | None = None,
+) -> list:
+	"""Stock balance per (item, warehouse) on/before `as_of_date`, for opening-balance import.
+
+	Takes the latest Stock Ledger Entry on/before the date for each item+warehouse and
+	returns its running balance (`qty_after_transaction`) and `valuation_rate`, joined with
+	the item's name and stock UOM. Zero/negative balances are dropped. The API user must be
+	able to read Stock Ledger Entry (same guard as every other export method).
+	"""
+	_check_read("Stock Ledger Entry")
+	as_of_date = as_of_date or frappe.utils.nowdate()
+
+	conditions = ["sle.is_cancelled = 0", "sle.posting_date <= %(as_of_date)s"]
+	values = {"as_of_date": as_of_date}
+	if warehouse:
+		conditions.append("sle.warehouse = %(warehouse)s")
+		values["warehouse"] = warehouse
+	if item_group:
+		conditions.append("item.item_group = %(item_group)s")
+		values["item_group"] = item_group
+	where = " and ".join(conditions)
+
+	# Rank SLEs per item+warehouse by posting datetime then creation, newest first; keep rank 1.
+	rows = frappe.db.sql(
+		f"""
+		select item_code, warehouse, item_name, stock_uom, balance_qty, valuation_rate
+		from (
+			select
+				sle.item_code, sle.warehouse,
+				item.item_name, item.stock_uom,
+				sle.qty_after_transaction as balance_qty,
+				sle.valuation_rate,
+				row_number() over (
+					partition by sle.item_code, sle.warehouse
+					order by sle.posting_date desc, sle.posting_time desc, sle.creation desc
+				) as rn
+			from `tabStock Ledger Entry` sle
+			inner join `tabItem` item on item.name = sle.item_code
+			where {where}
+		) ranked
+		where rn = 1 and balance_qty > 0
+		order by item_code, warehouse
+		""",
+		values,
+		as_dict=True,
+	)
+	return rows
+
+
+@frappe.whitelist()
 def analyze_links(doctype: str, filters: str | None = None, child_fieldnames: str | list | None = None) -> list:
 	_check_read(doctype)
 	parsed = _parse_filters(filters)
