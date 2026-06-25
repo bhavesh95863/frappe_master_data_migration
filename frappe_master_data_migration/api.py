@@ -136,6 +136,65 @@ def export_item_balances(
 	return rows
 
 
+PARTY_NAME_FIELD = {
+	"Customer": "customer_name",
+	"Supplier": "supplier_name",
+	"Employee": "employee_name",
+}
+
+
+@frappe.whitelist()
+def export_party_balances(party_type: str, as_of_date: str | None = None, company: str | None = None) -> list:
+	"""Net ledger balance per party on/before `as_of_date`, for party opening-balance import.
+
+	Sums `debit - credit` from GL Entry per party (company currency). A positive balance is a
+	debit/receivable balance, negative is a credit/payable balance — the sign is preserved so
+	the destination can post it correctly regardless of party type. The API user must be able
+	to read GL Entry and the party DocType.
+	"""
+	_check_read("GL Entry")
+	_check_read(party_type)
+	as_of_date = as_of_date or frappe.utils.nowdate()
+
+	conditions = [
+		"party_type = %(party_type)s",
+		"is_cancelled = 0",
+		"posting_date <= %(as_of_date)s",
+		"ifnull(party, '') != ''",
+	]
+	values = {"party_type": party_type, "as_of_date": as_of_date}
+	if company:
+		conditions.append("company = %(company)s")
+		values["company"] = company
+	where = " and ".join(conditions)
+
+	rows = frappe.db.sql(
+		f"""
+		select party, sum(debit - credit) as balance
+		from `tabGL Entry`
+		where {where}
+		group by party
+		having round(balance, 2) != 0
+		order by party
+		""",
+		values,
+		as_dict=True,
+	)
+
+	name_field = PARTY_NAME_FIELD.get(party_type)
+	if name_field and rows:
+		names = {
+			r["name"]: r.get(name_field)
+			for r in frappe.get_all(
+				party_type, filters={"name": ["in", [row["party"] for row in rows]]}, fields=["name", name_field]
+			)
+		}
+		for row in rows:
+			row["party_name"] = names.get(row["party"])
+
+	return rows
+
+
 @frappe.whitelist()
 def analyze_links(doctype: str, filters: str | None = None, child_fieldnames: str | list | None = None) -> list:
 	_check_read(doctype)

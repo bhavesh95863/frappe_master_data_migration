@@ -1,0 +1,158 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:POB-{#####}",
+ "creation": "2026-06-25 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "connection",
+  "company",
+  "party_type",
+  "column_break_head",
+  "as_of_date",
+  "status",
+  "section_break_scope",
+  "source_company",
+  "temporary_opening_account",
+  "column_break_scope",
+  "default_party_account",
+  "cost_center",
+  "section_break_items",
+  "items",
+  "section_break_results",
+  "created_entries"
+ ],
+ "fields": [
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Connection",
+   "options": "Migration Connection",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "party_type",
+   "fieldtype": "Select",
+   "label": "Party Type",
+   "options": "Customer\nSupplier\nEmployee",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Balances are taken as of end of this date and the opening Journal Entry is posted on it.",
+   "fieldname": "as_of_date",
+   "fieldtype": "Date",
+   "label": "As of Date",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nFetched\nPosted",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_scope",
+   "fieldtype": "Section Break",
+   "label": "Scope & Accounts"
+  },
+  {
+   "description": "Optional. Source company name to restrict the balances pulled.",
+   "fieldname": "source_company",
+   "fieldtype": "Data",
+   "label": "Source Company Filter"
+  },
+  {
+   "description": "Balancing account for the opening entry. Blank = the company's Temporary account.",
+   "fieldname": "temporary_opening_account",
+   "fieldtype": "Link",
+   "label": "Temporary Opening Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "column_break_scope",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Optional override used for all rows (required for Employee if no Party Type default account is set).",
+   "fieldname": "default_party_account",
+   "fieldtype": "Link",
+   "label": "Default Party Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "description": "Click 'Fetch Balances' to pull party balances from the source as of the date. For each row pick the Target Party (codes differ across ERPs) and adjust the Opening Amount if needed. Set Action to Skip to exclude a row.",
+   "fieldname": "section_break_items",
+   "fieldtype": "Section Break",
+   "label": "Party Balances"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Party Opening Balance Item"
+  },
+  {
+   "fieldname": "section_break_results",
+   "fieldtype": "Section Break",
+   "label": "Results"
+  },
+  {
+   "fieldname": "created_entries",
+   "fieldtype": "Small Text",
+   "label": "Created Journal Entry",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-25 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Master Data Migration",
+ "name": "Party Opening Balance Import",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

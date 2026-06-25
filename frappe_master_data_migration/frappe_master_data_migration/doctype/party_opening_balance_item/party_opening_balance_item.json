@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "creation": "2026-06-25 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "source_party",
+  "source_party_name",
+  "balance",
+  "action",
+  "column_break_map",
+  "party_doctype",
+  "target_party",
+  "target_party_account",
+  "amount",
+  "mapped"
+ ],
+ "fields": [
+  {
+   "fieldname": "source_party",
+   "fieldtype": "Data",
+   "label": "Source Party",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "source_party_name",
+   "fieldtype": "Data",
+   "label": "Source Party Name",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "balance",
+   "fieldtype": "Currency",
+   "label": "Source Balance",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1,
+   "description": "Net debit - credit from source. Positive = receivable/debit, negative = payable/credit."
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "Map\nSkip",
+   "default": "Map",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "column_break_map",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "party_doctype",
+   "fieldtype": "Data",
+   "label": "Party DocType",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "target_party",
+   "fieldtype": "Dynamic Link",
+   "options": "party_doctype",
+   "label": "Target Party",
+   "in_list_view": 1,
+   "columns": 2,
+   "depends_on": "eval:doc.action=='Map'",
+   "mandatory_depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "target_party_account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "label": "Party Account (override)",
+   "description": "Blank = the party's default receivable/payable account.",
+   "depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Opening Amount",
+   "in_list_view": 1,
+   "columns": 1,
+   "depends_on": "eval:doc.action=='Map'"
+  },
+  {
+   "fieldname": "mapped",
+   "fieldtype": "Check",
+   "label": "Posted",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-25 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Master Data Migration",
+ "name": "Party Opening Balance Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
