@@ -26,17 +26,17 @@
   {
    "fieldname": "connection",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Connection",
    "options": "Migration Connection",
-   "in_list_view": 1,
    "reqd": 1
   },
   {
    "fieldname": "company",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Company",
    "options": "Company",
-   "in_list_view": 1,
    "reqd": 1
   },
   {
@@ -47,17 +47,17 @@
    "description": "Opening balance is taken as of end of this date and the Stock Reconciliation is posted on it.",
    "fieldname": "as_of_date",
    "fieldtype": "Date",
-   "label": "As of Date",
    "in_list_view": 1,
+   "label": "As of Date",
    "reqd": 1
   },
   {
    "default": "Draft",
    "fieldname": "status",
    "fieldtype": "Select",
+   "in_list_view": 1,
    "label": "Status",
    "options": "Draft\nFetched\nPosted",
-   "in_list_view": 1,
    "read_only": 1
   },
   {
@@ -90,7 +90,7 @@
   },
   {
    "default": "1",
-   "description": "When a row changes UOM (e.g. nos→box), write that conversion into the target Item's UOM Conversion table so future transactions know the factor. Existing conversions with a different factor are left untouched and reported.",
+   "description": "When a row changes UOM (e.g. nos\u2192box), write that conversion into the target Item's UOM Conversion table so future transactions know the factor. Existing conversions with a different factor are left untouched and reported.",
    "fieldname": "save_uom_conversions",
    "fieldtype": "Check",
    "label": "Save UOM Conversions to Item"
@@ -121,7 +121,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-25 00:00:00",
+ "modified": "2026-06-25 09:17:32.427702",
  "modified_by": "Administrator",
  "module": "Frappe Master Data Migration",
  "name": "Opening Balance Import",
